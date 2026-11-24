@@ -104,10 +104,11 @@ async def activity_log(request: Request, call_next):
 
 
 def render(request, name, ctx):
-    """templates.TemplateResponse needs "request" inside the context dict — Starlette's
-    Jinja2 url_for() reads it from there to build URLs. Every route below funnels through
-    this one helper so that requirement can't be forgotten on a new route."""
-    return templates.TemplateResponse(name, {"request": request, **ctx})
+    """Every route funnels through this one helper. Starlette's Jinja2Templates signature is
+    TemplateResponse(request, name, context) since 0.29; Starlette 1.x dropped the old
+    (name, {"request": ...}) form — with it a fresh install died on its first page
+    (ELECTRON-011 blocker, 2026-11-24). Jinja's url_for() reads the request from here."""
+    return templates.TemplateResponse(request, name, ctx)
 
 
 # ------------------------------------------------------------------------------
@@ -349,7 +350,7 @@ def _wizard_ctx(step_key, **extra):
 
 def _render_wizard(request, template, ctx):
     ctx["request"] = request
-    return templates.TemplateResponse("onboarding/" + template, ctx)
+    return templates.TemplateResponse(request, "onboarding/" + template, ctx)
 
 
 def _wizard_draft():

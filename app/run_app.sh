@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # app/run_app.sh — bootstrap + start the local setup web app.
 #
-# Creates a private venv under app/.venv (gitignored) the first time it runs, installs
-# the packages the app needs (fastapi, uvicorn, jinja2, python-multipart, pyyaml) into it
-# if missing, then starts the FastAPI app (served by uvicorn) bound to 127.0.0.1 only and
-# opens it in the default browser.
+# Creates a private venv under app/.venv (gitignored) the first time it runs, installs the
+# packages the app needs from app/requirements.txt (pinned — see the file for why) if missing,
+# then starts the FastAPI app (served by uvicorn) bound to 127.0.0.1 only and opens it in
+# the default browser.
 #
 # Works from any CWD — everything is derived from this script's own location, never
 # from the caller's working directory.
@@ -19,6 +19,13 @@ export JOBAPPLY_PORT="$PORT"
 
 if ! command -v python3 >/dev/null 2>&1; then
   echo "ERROR: python3 not found on PATH — install Python 3 first." >&2
+  exit 1
+fi
+
+# Python floor: the pinned runtime (app/requirements.txt) is proven on 3.9 and 3.15.
+if ! python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 9) else 1)' >/dev/null 2>&1; then
+  echo "ERROR: Python 3.9 or newer is required — \"$(command -v python3)\" is $(python3 --version 2>&1 | cut -d' ' -f2)." >&2
+  echo "       Install a current Python 3 (e.g. https://www.python.org/downloads/macos/) and retry." >&2
   exit 1
 fi
 
@@ -43,9 +50,9 @@ NEED_INSTALL=0
 "$PY" -c "import google.oauth2" >/dev/null 2>&1 || NEED_INSTALL=1
 "$PY" -c "import google_auth_oauthlib" >/dev/null 2>&1 || NEED_INSTALL=1
 if [[ "$NEED_INSTALL" -eq 1 ]]; then
-  echo "[run_app] installing fastapi + uvicorn + jinja2 + python-multipart + pyyaml + pypdf + google-auth into the venv ..."
+  echo "[run_app] installing the pinned runtime from app/requirements.txt into the venv ..."
   "$PIP" install --quiet --upgrade pip >/dev/null 2>&1
-  "$PIP" install --quiet fastapi uvicorn jinja2 python-multipart pyyaml pypdf google-auth google-auth-oauthlib
+  "$PIP" install --quiet -r "$SCRIPT_DIR/requirements.txt"
 fi
 
 echo "[run_app] starting server on http://${HOST}:${PORT} ..."

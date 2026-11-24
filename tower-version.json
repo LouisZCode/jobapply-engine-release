@@ -1,6 +1,6 @@
 {
   "version": "0.1.0",
-  "notes": "First release — prepare-mode pipeline",
-  "engine": "c9b1d461e43d8617912397dcbbbdc5685fea0392",
-  "date": "2026-11-24T14:48:54Z"
+  "notes": "Fix: fresh installs opened a blank first page",
+  "engine": "19191180c3c8d2a4d6679048c23f8d2a338ee7b4",
+  "date": "2026-11-24T19:31:34Z"
 }
