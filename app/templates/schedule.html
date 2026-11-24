@@ -1,0 +1,107 @@
+{% extends "layout.html" %}
+{% block title %}Schedule — Job Apply{% endblock %}
+{% block content %}
+<h1>Schedule</h1>
+
+{% if test_mode %}
+  <div class="banner warn">APP_TEST=1 is set — the launchd install step is stubbed (nothing real runs). Used for automated testing only.</div>
+{% endif %}
+
+{% if result %}
+  <div class="banner {{ 'ok' if result.ok else 'bad' }}">
+    {% if result.errors %}
+      <strong>Please fix the following:</strong>
+      <ul>{% for e in result.errors %}<li>{{ e }}</li>{% endfor %}</ul>
+    {% else %}
+      <strong>{{ 'Schedule saved and installed.' if result.ok else 'Something failed — see the log below.' }}</strong>
+      {% if not result.ok and result.log %}<pre class="log">{{ result.log }}</pre>{% endif %}
+    {% endif %}
+  </div>
+{% endif %}
+
+{% if toggle_result %}
+  <div class="banner {{ 'ok' if toggle_result.ok else 'bad' }}">{{ toggle_result.message or toggle_result.stdout or ('Paused.' if toggle_result else 'Resumed.') }}</div>
+{% endif %}
+
+<div class="card">
+  <div class="card-head">Daily run — {{ "running daily at " ~ run_time if agents.apply.loaded else ("PAUSED" if agents.apply.installed else "not installed yet") }}</div>
+  {% if agents.apply.installed %}
+  <div class="checklist">
+    <span class="status-badge {{ 'ok' if agents.apply.loaded else 'warn' }}">{{ 'On' if agents.apply.loaded else 'Paused' }}</span>
+    <div style="flex:1">
+      <form method="post" action="{{ url_for('schedule_toggle') }}" style="margin:0;">
+        <input type="hidden" name="turn" value="{{ 'off' if agents.apply.loaded else 'on' }}">
+        <button type="submit" class="btn small {{ 'secondary' if agents.apply.loaded else 'primary' }}">
+          {{ '⏸ Pause the daily run' if agents.apply.loaded else '▶ Resume the daily run' }}
+        </button>
+      </form>
+      <p class="note" style="margin:8px 0 0;">Pausing keeps everything installed — it just
+      switches the schedule off. The health watchdog stays on and keeps watching.</p>
+    </div>
+  </div>
+  {% else %}
+  <p class="note">No schedule from this copy is installed yet — save &amp; install it below.
+  {% if agents.health.installed %}(A schedule from ANOTHER copy of the pipeline exists on this Mac account; this app won't touch it.){% endif %}</p>
+  {% endif %}
+  <hr class="section-divider">
+  <div class="grid-3">
+    <div class="stat">
+      <div class="status-line">
+        <span class="status-badge {{ 'ok' if health.apply.ok_today else 'bad' }}">●</span>
+        <strong>Last daily run</strong>
+      </div>
+      <div class="stat-sub">{{ health.apply.last_ok_end or 'no run recorded yet' }}{% if health.apply.last_rc not in (None, 0) %} <span class="bad">(last rc={{ health.apply.last_rc }})</span>{% endif %}</div>
+    </div>
+    <div class="stat">
+      <div class="status-line">
+        <span class="status-badge {{ 'ok' if not health.sweep.stale else 'warn' }}">●</span>
+        <strong>Mail sweep</strong>
+      </div>
+      <div class="stat-sub">{{ health.sweep.last_ok_end or 'never' }}{% if health.sweep.age_hours is not none %} · {{ health.sweep.age_hours }}h ago{% endif %}</div>
+    </div>
+    <div class="stat">
+      <div class="status-line">
+        <span class="status-badge {{ 'ok' if agents.health.loaded else 'warn' }}">●</span>
+        <strong>Health watchdog</strong>
+      </div>
+      <div class="stat-sub">{{ 'watching (09:00 daily)' if agents.health.loaded else 'not loaded' }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <form method="post" action="{{ url_for('schedule_save') }}">
+    <div class="grid-2">
+      <div class="field">
+        <label for="run_time">Daily run time<span class="info" tabindex="0">ⓘ<span class="tip">24-hour local time. The pipeline runs once a day at this time on this Mac — keep the Mac awake for it with the switch on Home.</span></span></label>
+        <input type="time" id="run_time" name="run_time" value="{{ run_time }}" required>
+      </div>
+      <div class="field">
+        <label for="max_applies">Max applications per run<span class="info" tabindex="0">ⓘ<span class="tip">How many applications one daily run may send. Start small (3) and raise it once you trust the results. A separate rolling 24-hour cap also bounds the total.</span></span></label>
+        <input type="number" id="max_applies" name="max_applies" min="1" value="{{ max_applies }}" required>
+      </div>
+    </div>
+    <div class="field">
+      <label for="mode">Mode<span class="info" tabindex="0">ⓘ<span class="tip">prepare fills every application up to the final Submit screen and stops for you to review — nothing is ever sent. live actually submits. Start in prepare; switch to live once you've reviewed a few prepared applications.</span></span></label>
+      <select id="mode" name="mode">
+        <option value="prepare" {{ 'selected' if mode == 'prepare' }}>prepare — fill everything, never submit</option>
+        <option value="live" {{ 'selected' if mode == 'live' }}>live — actually submit applications</option>
+      </select>
+    </div>
+    {% if not ready %}
+      <div class="banner warn">
+        <strong>Still missing before the schedule can run for real:</strong>
+        <ul>
+          {% for item in readiness_items if not item.ok %}
+            <li><a href="{{ item.href }}">{{ item.label }}</a></li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+    <div class="actions-row">
+      <button type="submit" class="btn" {{ 'disabled' if not ready }}>Save &amp; install schedule</button>
+      {% if installed_plists %}<span class="note">Daily schedule is installed on this Mac.</span>{% endif %}
+    </div>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,659 @@
+{% extends "layout.html" %}
+{% block title %}Profile — Job Apply{% endblock %}
+
+{% macro tri_select(name, value, help_text="") %}
+  <select name="{{ name }}">
+    <option value="" {{ 'selected' if value == '' }}>Prefer not to say / not applicable</option>
+    <option value="yes" {{ 'selected' if value == 'yes' }}>Yes</option>
+    <option value="no" {{ 'selected' if value == 'no' }}>No</option>
+  </select>
+  {% if help_text %}<p class="help">{{ help_text }}</p>{% endif %}
+{% endmacro %}
+
+{% macro lang_level_select(value) %}
+  {% set levels = ['', 'Native', 'C2', 'C1', 'B2', 'B1', 'A2', 'A1', 'Basic'] %}
+  {% set matched = value and value|lower in levels|map('lower')|list %}
+  <select name="lang_level">
+    {% for lvl in levels %}
+      <option value="{{ lvl }}" {{ 'selected' if value|lower == lvl|lower }}>{{ lvl if lvl else '—' }}</option>
+    {% endfor %}
+    {% if value and not matched %}
+      <option value="{{ value }}" selected>{{ value }}</option>
+    {% endif %}
+  </select>
+{% endmacro %}
+
+{% macro resume_select(name, value, cv_pool, allow_default) %}
+  {# A CV picker over the pool in claude_applicator/data/ — values are "data/<file>". An
+     older saved path that's no longer in the pool is kept as its own option so a re-save
+     never silently drops it. #}
+  <select name="{{ name }}">
+    {% if allow_default %}<option value="" {{ 'selected' if not value }}>Default CV</option>{% endif %}
+    {% if not allow_default and not cv_pool %}<option value="">— upload a CV above first —</option>{% endif %}
+    {% for pdf in cv_pool %}
+      <option value="data/{{ pdf }}" {{ 'selected' if value == 'data/' ~ pdf }}>{{ pdf }}</option>
+    {% endfor %}
+    {% if value and (value[5:] not in cv_pool or not value.startswith('data/')) %}
+      <option value="{{ value }}" selected>{{ value }} (missing)</option>
+    {% endif %}
+  </select>
+{% endmacro %}
+
+{% block content %}
+<h1>Profile</h1>
+
+{% if profile_draft %}
+  <div class="banner ok">
+    Pre-filled from {{ profile_draft_source }} — review everything, fix what's wrong, then Save.
+    Nothing is stored until you save.
+  </div>
+{% endif %}
+
+<div class="card">
+  <h2>Your CV</h2>
+  {% if cv_extract_banner %}
+    <div class="banner {{ 'ok' if cv_extract_banner.ok else 'bad' }}">{{ cv_extract_banner.message }}</div>
+  {% endif %}
+
+  <form method="post" action="{{ url_for('profile_cv_upload') }}" enctype="multipart/form-data">
+    <div class="grid-2" style="align-items:end;">
+      <div class="field" style="margin:0;">
+        <label for="cv_pdf">{{ 'Upload another CV (PDF)' if cv_pool else 'Upload your CV (PDF)' }}</label>
+        <input type="file" id="cv_pdf" name="cv_pdf" accept="application/pdf">
+      </div>
+      <div><button type="submit" class="btn secondary">Upload</button></div>
+    </div>
+  </form>
+
+  {% if cv_pool %}
+    <hr class="section-divider" style="margin:16px 0;">
+    <form method="post" action="{{ url_for('profile_cv_prefill') }}">
+      <div class="grid-2" style="align-items:end;">
+        <div class="field" style="margin:0;">
+          <label for="cv_filename">Let AI fill my profile from</label>
+          {% if cv_pool | length > 1 %}
+            <select id="cv_filename" name="cv_filename">
+              {% for pdf in cv_pool %}
+                <option value="{{ pdf }}" {{ 'selected' if pdf == cv_selected }}>{{ pdf }}</option>
+              {% endfor %}
+            </select>
+          {% else %}
+            <input type="hidden" name="cv_filename" value="{{ cv_pool[0] }}">
+            <span class="static-value">{{ cv_pool[0] }}</span>
+          {% endif %}
+        </div>
+        <div class="field">
+          <label>Use{% if brains|length > 1 %} which brain{% endif %}</label>
+          {% if brains %}
+            <div class="actions-row">
+              <select name="brain" id="brain-select" class="key-input">
+                {% for b in brains %}
+                  <option value="{{ b.id }}" data-model="{{ llm_models.get(b.id) or llm_defaults.get(b.id) or '' }}">{{ b.label }}</option>
+                {% endfor %}
+              </select>
+              <input type="text" name="model" id="brain-model" class="key-input"
+                     value="{{ llm_models.get(brains[0].id) or llm_defaults.get(brains[0].id) or '' }}"
+                     placeholder="model id — for API-key brains" title="Pre-filled with this brain's standard model; CLI brains use their own subscription">
+              <button type="submit" class="btn" {{ 'disabled' if job_status.running }}>Fill my profile from my CV</button>
+            </div>
+          {% else %}
+            <span class="note"><a href="{{ url_for('connections') }}#intelligence">Connect an AI or add an API key</a> to use this.</span>
+          {% endif %}
+        </div>
+      </div>
+    </form>
+  {% endif %}
+  <script>
+    // Pre-fill the model field with the selected brain's standard model (falls back to
+    // the server-side default when empty — pages stay functional without JS).
+    (function () {
+      var sel = document.getElementById('brain-select'), inp = document.getElementById('brain-model');
+      if (!sel || !inp) return;
+      sel.addEventListener('change', function () {
+        var m = sel.selectedOptions[0].getAttribute('data-model') || '';
+        inp.value = m;
+        inp.placeholder = sel.value === 'claude' ? 'not needed for CLI brains' : 'model id — for API-key brains';
+      });
+    })();
+  </script>
+
+  {% set panel_names = ['cv_extract'] %}
+  {% set panel_back = 'profile' %}
+  {% include "_job_panel.html" %}
+</div>
+
+{% if errors %}
+  <div class="banner bad">
+    <strong>Please fix the following before saving:</strong>
+    <ul>{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul>
+  </div>
+{% endif %}
+
+{% if render_result %}
+  <div class="banner {{ 'ok' if render_result.ok else 'bad' }}">
+    <strong>
+      {% if render_result.ok %}Profile saved.
+      {% else %}Profile saved, but something went wrong finishing setup — fix the error below and save again.{% endif %}
+    </strong>
+    {% if not render_result.ok and (render_result.stdout or render_result.stderr) %}
+      <pre class="log">{{ (render_result.stdout ~ "\n" ~ render_result.stderr).strip() }}</pre>
+    {% endif %}
+    {% if render_result.ok %}
+      <p style="margin-top:10px;">
+        <a class="btn small" href="{{ url_for('documents_page') }}">Next: your background</a>
+      </p>
+    {% endif %}
+  </div>
+{% endif %}
+
+<form method="post" action="{{ url_for('profile_save') }}">
+
+  <h2>Identity &amp; contact</h2>
+  <div class="card">
+    <div class="field">
+      <label for="full_name">Full name<span class="req">*</span></label>
+      <input type="text" id="full_name" name="full_name" value="{{ form.full_name }}" placeholder="e.g. Maria Musterfrau" required>
+    </div>
+    <div class="grid-2">
+      <div class="field">
+        <label for="email">Email<span class="req">*</span><span class="info" tabindex="0">ⓘ<span class="tip">One address for everything: LinkedIn forms and external application forms alike. Use the email on your LinkedIn account, and keep an eye on that inbox — replies and verification links land there.</span></span></label>
+        <input type="email" id="email" name="email" value="{{ form.email }}" placeholder="maria@example.com" required>
+      </div>
+      <div class="field">
+        <label for="phone">Phone<span class="req">*</span></label>
+        <input type="tel" id="phone" name="phone" value="{{ form.phone }}" placeholder="+49 30 1234567" required>
+      </div>
+    </div>
+    <div class="grid-2">
+      <div class="field">
+        <label for="current_city">Current city<span class="req">*</span></label>
+        <input type="text" id="current_city" name="current_city" value="{{ form.current_city }}" placeholder="Musterstadt" required>
+      </div>
+      <div class="field">
+        <label for="country">Country<span class="req">*</span></label>
+        <input type="text" id="country" name="country" value="{{ form.country }}" placeholder="Germany" required>
+      </div>
+    </div>
+    <div class="grid-3">
+      <div class="field">
+        <label for="portfolio">Portfolio URL</label>
+        <input type="text" id="portfolio" name="portfolio" value="{{ form.portfolio }}" placeholder="https://maria.example.com">
+      </div>
+      <div class="field">
+        <label for="github">GitHub URL</label>
+        <input type="text" id="github" name="github" value="{{ form.github }}" placeholder="https://github.com/example">
+      </div>
+      <div class="field">
+        <label for="linkedin">LinkedIn URL</label>
+        <input type="text" id="linkedin" name="linkedin" value="{{ form.linkedin }}" placeholder="https://www.linkedin.com/in/example">
+      </div>
+    </div>
+  </div>
+
+  <h2>Location &amp; relocation</h2>
+  <div class="card">
+    <div class="grid-2">
+      <div class="field">
+        <label for="street_address">Street address (optional)<span class="info" tabindex="0">ⓘ<span class="tip">Some external ATS forms (common in the German market) require this. Leave blank to skip those fields.</span></span></label>
+        <input type="text" id="street_address" name="street_address" value="{{ form.street_address }}">
+      </div>
+      <div class="field">
+        <label for="postal_code">Postal code (optional)</label>
+        <input type="text" id="postal_code" name="postal_code" value="{{ form.postal_code }}">
+      </div>
+    </div>
+    <div class="field">
+      <label for="must_be_based_in">Must be based in (hard gate)<span class="info" tabindex="0">ⓘ<span class="tip">Leave empty = anywhere (no geographic restriction). Roles that would require you to be based outside this area are skipped.</span></span></label>
+      <input type="text" id="must_be_based_in" name="must_be_based_in" value="{{ form.must_be_based_in }}" placeholder="e.g. Germany — leave empty for anywhere">
+    </div>
+    <div class="field">
+      <label for="onsite_hybrid_cities">Cities you'll accept hybrid/onsite in</label>
+      <input type="text" id="onsite_hybrid_cities" name="onsite_hybrid_cities" value="{{ form.onsite_hybrid_cities }}" placeholder="Berlin, Musterstadt">
+      <p class="help">Comma-separated. Only matters for hybrid/onsite postings — remote roles are governed by "must be based in" above.</p>
+    </div>
+    <div class="field checkbox-row">
+      <input type="checkbox" id="willing_to_relocate" name="willing_to_relocate" {{ 'checked' if form.willing_to_relocate }}>
+      <label for="willing_to_relocate">I'm willing to relocate for the right role</label>
+    </div>
+    <div class="grid-2">
+      <div class="field">
+        <label for="relocating_to">Currently relocating to (optional)</label>
+        <input type="text" id="relocating_to" name="relocating_to" value="{{ form.relocating_to }}" placeholder="leave blank if not relocating">
+      </div>
+      <div class="field">
+        <label for="relocation_date">Relocation date (optional)</label>
+        <input type="text" id="relocation_date" name="relocation_date" value="{{ form.relocation_date }}" placeholder="2026-11-01">
+      </div>
+    </div>
+    <div class="grid-2">
+      <div class="field">
+        <label for="remote_preference">Remote preference (free text)</label>
+        <input type="text" id="remote_preference" name="remote_preference" value="{{ form.remote_preference }}" placeholder="remote-first, open to occasional travel">
+      </div>
+      <div class="field">
+        <label for="travel">Travel (free text)</label>
+        <input type="text" id="travel" name="travel" value="{{ form.travel }}" placeholder="occasional travel / offsites OK">
+      </div>
+    </div>
+    <div class="field">
+      <label for="location_note">Note (optional, free text)</label>
+      <input type="text" id="location_note" name="location_note" value="{{ form.location_note }}" placeholder="e.g. based regardless of remote/onsite">
+    </div>
+  </div>
+
+  <h2>Work authorization</h2>
+  <div class="card">
+    <div class="field">
+      <label for="authorized_in">Authorized to work in</label>
+      <input type="text" id="authorized_in" name="authorized_in" value="{{ form.authorized_in }}" placeholder="Germany, EU">
+      <p class="help">Comma-separated list of countries/areas where you hold the right to work today.</p>
+    </div>
+    <div class="grid-2">
+      <div class="field">
+        <label>Do you require visa sponsorship?</label>
+        {{ tri_select('visa_sponsorship_required', form.visa_sponsorship_required) }}
+      </div>
+      <div class="field">
+        <label for="nationality">Nationality<span class="req">*</span><span class="info" tabindex="0">ⓘ<span class="tip">A truthful data field (country-list dropdowns, passport fields) — always answered honestly.</span></span></label>
+        <input type="text" id="nationality" name="nationality" value="{{ form.nationality }}" placeholder="e.g. German" required>
+      </div>
+    </div>
+    <div class="grid-2">
+      <div class="field">
+        <label>EU citizen?</label>
+        {{ tri_select('eu_citizen', form.eu_citizen) }}
+      </div>
+      <div class="field">
+        <label>Unrestricted right to work in the EU?</label>
+        {{ tri_select('right_to_work_eu', form.right_to_work_eu) }}
+      </div>
+    </div>
+    <div class="field">
+      <label for="work_permit_type">Work permit type (short label)</label>
+      <input type="text" id="work_permit_type" name="work_permit_type" value="{{ form.work_permit_type }}" placeholder="Permanent residence / Blue Card / EU citizen">
+    </div>
+    <div class="field">
+      <label for="work_permit_note">Work authorization, in your own words</label>
+      <textarea id="work_permit_note" name="work_permit_note" placeholder="Permanent residence and work permit, no sponsorship needed now or ever.">{{ form.work_permit_note }}</textarea>
+      <p class="help">Used for free-text "describe your work authorization" fields.</p>
+    </div>
+    <div class="field checkbox-row">
+      <input type="checkbox" id="citizenship_gate_pick_citizen" name="citizenship_gate_pick_citizen" {{ 'checked' if form.citizenship_gate_pick_citizen }}>
+      <label for="citizenship_gate_pick_citizen">Treat gate-style "citizen / requires sponsorship" screening
+        questions as a work-permission proxy and pick the citizen-coded option<span class="info" tabindex="0">ⓘ<span class="tip">Only relevant if you hold unrestricted work rights WITHOUT citizenship (e.g. a permanent residence permit). Default is off — only turn this on if you understand the gate-vs-data distinction. Free-text answers never claim citizenship regardless of this setting; only true data fields (like Nationality above) always stay truthful.</span></span></label>
+    </div>
+  </div>
+
+
+  <h2>Compensation</h2>
+  <div class="card">
+    <div class="grid-3">
+      <div class="field">
+        <label for="currency">Currency<span class="req">*</span></label>
+        <input type="text" id="currency" name="currency" value="{{ form.currency }}" placeholder="EUR" required>
+      </div>
+      <div class="field">
+        <label for="comp_forced_single_number">Salary — single number<span class="req">*</span><span class="info" tabindex="0">ⓘ<span class="tip">What gets typed when a form forces one yearly number. Gross, in the currency above.</span></span></label>
+        <input type="number" id="comp_forced_single_number" name="comp_forced_single_number" value="{{ form.comp_forced_single_number }}" placeholder="65000" required>
+      </div>
+      <div class="field">
+        <label for="comp_range_or_text_field">Salary — range<span class="info" tabindex="0">ⓘ<span class="tip">What gets typed when a form wants a range or free text. Left blank, it's built from the range below (or the single number).</span></span></label>
+        <input type="text" id="comp_range_or_text_field" name="comp_range_or_text_field" value="{{ form.comp_range_or_text_field }}" placeholder="65,000-72,000">
+      </div>
+    </div>
+    <div class="grid-3">
+      <div class="field">
+        <label for="comp_range_low">Range — low</label>
+        <input type="number" id="comp_range_low" name="comp_range_low" value="{{ form.comp_range_low }}" placeholder="65000">
+      </div>
+      <div class="field">
+        <label for="comp_range_high">Range — high</label>
+        <input type="number" id="comp_range_high" name="comp_range_high" value="{{ form.comp_range_high }}" placeholder="72000">
+      </div>
+      <div class="field">
+        <label for="comp_floor">Walk-away floor (secret)<span class="info" tabindex="0">ⓘ<span class="tip">Never entered into any form or written answer, anywhere. It only tells the agent your walk-away point.</span></span></label>
+        <input type="number" id="comp_floor" name="comp_floor" value="{{ form.comp_floor }}" placeholder="55000">
+      </div>
+    </div>
+    <div class="grid-2">
+      <div class="field">
+        <label for="comp_target">Target</label>
+        <input type="number" id="comp_target" name="comp_target" value="{{ form.comp_target }}" placeholder="65000">
+      </div>
+      <div class="field">
+        <label for="comp_strategy_note">Negotiation guidance</label>
+        <input type="text" id="comp_strategy_note" name="comp_strategy_note" value="{{ form.comp_strategy_note }}" placeholder="Ask their band first when possible.">
+      </div>
+    </div>
+  </div>
+
+  <h2>Languages</h2>
+  <div class="card">
+    <datalist id="language-options">
+      <option value="English"><option value="German"><option value="Spanish"><option value="French">
+      <option value="Italian"><option value="Portuguese"><option value="Dutch"><option value="Polish">
+      <option value="Czech"><option value="Slovak"><option value="Hungarian"><option value="Romanian">
+      <option value="Bulgarian"><option value="Greek"><option value="Serbian"><option value="Croatian">
+      <option value="Swedish"><option value="Norwegian"><option value="Danish"><option value="Finnish">
+      <option value="Russian"><option value="Ukrainian"><option value="Turkish"><option value="Arabic">
+      <option value="Hebrew"><option value="Hindi"><option value="Urdu"><option value="Bengali">
+      <option value="Tamil"><option value="Chinese (Mandarin)"><option value="Cantonese"><option value="Japanese">
+      <option value="Korean"><option value="Vietnamese"><option value="Thai"><option value="Indonesian">
+      <option value="Malay"><option value="Filipino (Tagalog)"><option value="Persian (Farsi)"><option value="Swahili">
+    </datalist>
+    <div id="languages-container">
+      {% for row in form.languages %}
+        <div class="repeat-row grid-2">
+          <div class="field"><label>Language</label><input type="text" name="lang_language" value="{{ row.language }}" list="language-options" placeholder="Type to search — e.g. German"></div>
+          <div class="field"><label>Level</label>{{ lang_level_select(row.level) }}</div>
+          <button type="button" class="btn small ghost row-remove" onclick="this.closest('.repeat-row').remove()">Remove</button>
+        </div>
+      {% endfor %}
+    </div>
+    <template id="language-template">
+      <div class="repeat-row grid-2">
+        <div class="field"><label>Language</label><input type="text" name="lang_language" list="language-options" placeholder="Type to search — e.g. German"></div>
+        <div class="field"><label>Level</label>{{ lang_level_select('') }}</div>
+        <button type="button" class="btn small ghost row-remove" onclick="this.closest('.repeat-row').remove()">Remove</button>
+      </div>
+    </template>
+    <button type="button" class="btn small secondary" onclick="addRow('languages-container','language-template')">+ Add language</button>
+  </div>
+
+  <h2>Education</h2>
+  <div class="card">
+    <div id="education-container">
+      {% for row in form.education %}
+        <div class="repeat-row grid-3">
+          <div class="field"><label>Degree</label><input type="text" name="edu_degree" value="{{ row.degree }}" placeholder="BSc Computer Science"></div>
+          <div class="field"><label>School</label><input type="text" name="edu_school" value="{{ row.school }}" placeholder="Musterstadt Technical University"></div>
+          <div class="field"><label>Years</label><input type="text" name="edu_years" value="{{ row.years }}" placeholder="2018-2020"></div>
+          <button type="button" class="btn small ghost row-remove" onclick="this.closest('.repeat-row').remove()">Remove</button>
+        </div>
+      {% endfor %}
+    </div>
+    <template id="education-template">
+      <div class="repeat-row grid-3">
+        <div class="field"><label>Degree</label><input type="text" name="edu_degree" placeholder="BSc Computer Science"></div>
+        <div class="field"><label>School</label><input type="text" name="edu_school" placeholder="Musterstadt Technical University"></div>
+        <div class="field"><label>Years</label><input type="text" name="edu_years" placeholder="2018-2020"></div>
+        <button type="button" class="btn small ghost row-remove" onclick="this.closest('.repeat-row').remove()">Remove</button>
+      </div>
+    </template>
+    <button type="button" class="btn small secondary" onclick="addRow('education-container','education-template')">+ Add education</button>
+  </div>
+
+  <h2>Certifications</h2>
+  <div class="card">
+    <div id="certifications-container">
+      {% for c in form.certifications %}
+        <div class="repeat-row" style="grid-template-columns: 1fr auto;">
+          <div class="field"><input type="text" name="cert_text" value="{{ c }}" placeholder="Example Certification, Issuing Body (2025)"></div>
+          <button type="button" class="btn small ghost row-remove" onclick="this.closest('.repeat-row').remove()">Remove</button>
+        </div>
+      {% endfor %}
+    </div>
+    <template id="certification-template">
+      <div class="repeat-row" style="grid-template-columns: 1fr auto;">
+        <div class="field"><input type="text" name="cert_text" placeholder="Example Certification, Issuing Body (2025)"></div>
+        <button type="button" class="btn small ghost row-remove" onclick="this.closest('.repeat-row').remove()">Remove</button>
+      </div>
+    </template>
+    <button type="button" class="btn small secondary" onclick="addRow('certifications-container','certification-template')">+ Add certification</button>
+  </div>
+
+  <h2>Experience</h2>
+  <div class="card">
+    <h3>Most recent role</h3>
+    <div class="grid-2">
+      <div class="field"><label>Company</label><input type="text" name="exp_company" value="{{ form.exp_company }}" placeholder="Beispiel Software GmbH"></div>
+      <div class="field"><label>Title</label><input type="text" name="exp_title" value="{{ form.exp_title }}" placeholder="Data Analyst"></div>
+    </div>
+    <div class="grid-3">
+      <div class="field"><label>Industry</label><input type="text" name="exp_industry" value="{{ form.exp_industry }}" placeholder="B2B SaaS"></div>
+      <div class="field">
+        <label>Mode</label>
+        <select name="exp_mode">
+          {% for m in ['', 'remote', 'hybrid', 'onsite'] %}
+            <option value="{{ m }}" {{ 'selected' if form.exp_mode == m }}>{{ m if m else '—' }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field"><label>Start</label><input type="text" name="exp_start" value="{{ form.exp_start }}" placeholder="2022"></div>
+    </div>
+    <div class="field"><label>End</label><input type="text" name="exp_end" value="{{ form.exp_end }}" placeholder="present"></div>
+    <div class="field">
+      <label>Highlight — one concrete, metric-driven achievement</label>
+      <textarea name="exp_highlight" placeholder="Built an internal reporting dashboard that cut weekly report prep time from two days to two hours.">{{ form.exp_highlight }}</textarea>
+    </div>
+    <div class="field">
+      <label for="prior_companies">Prior companies</label>
+      <input type="text" id="prior_companies" name="prior_companies" value="{{ form.prior_companies }}" placeholder="Muster Consulting AG, Beispiel Retail GmbH">
+      <p class="help">Comma-separated, flat list for background context.</p>
+    </div>
+    <div class="field">
+      <label for="exp_summary">One-line professional summary</label>
+      <input type="text" id="exp_summary" name="exp_summary" value="{{ form.exp_summary }}" placeholder="5+ years of data analytics experience across B2B SaaS and retail.">
+    </div>
+  </div>
+
+  <h2>Portfolio projects</h2>
+  <div class="card">
+    <div id="projects-container">
+      {% for row in form.portfolio_projects %}
+        <div class="repeat-row">
+          <div class="field"><label>Name</label><input type="text" name="proj_name" value="{{ row.name }}" placeholder="Muster Insights"></div>
+          <div class="field"><label>Description</label><textarea name="proj_desc" placeholder="What it does, the stack, any concrete traction.">{{ row.desc }}</textarea></div>
+          <button type="button" class="btn small ghost row-remove" onclick="this.closest('.repeat-row').remove()">Remove</button>
+        </div>
+      {% endfor %}
+    </div>
+    <template id="project-template">
+      <div class="repeat-row">
+        <div class="field"><label>Name</label><input type="text" name="proj_name" placeholder="Muster Insights"></div>
+        <div class="field"><label>Description</label><textarea name="proj_desc" placeholder="What it does, the stack, any concrete traction."></textarea></div>
+        <button type="button" class="btn small ghost row-remove" onclick="this.closest('.repeat-row').remove()">Remove</button>
+      </div>
+    </template>
+    <button type="button" class="btn small secondary" onclick="addRow('projects-container','project-template')">+ Add project</button>
+  </div>
+
+  <h2>Technical stack</h2>
+  <div class="card">
+    <div class="field">
+      <label for="technical_stack">Technologies</label>
+      <input type="text" id="technical_stack" name="technical_stack" value="{{ form.technical_stack }}" placeholder="Python, SQL, PostgreSQL, Docker" oninput="renderTags(this.value)">
+      <p class="help">Comma-separated. Feeds screening answers and the CV builder.</p>
+      <div class="tag-preview" id="tag-preview"></div>
+    </div>
+  </div>
+
+  <h2>Screening</h2>
+  <div class="card">
+    <div class="grid-2">
+      <div class="field"><label>Earliest start date</label><input type="text" name="screening_earliest_start_date" value="{{ form.screening_earliest_start_date }}" placeholder="2026-11-01"></div>
+      <div class="field"><label>Notice period</label><input type="text" name="screening_notice_period" value="{{ form.screening_notice_period }}" placeholder="available with 4 weeks notice"></div>
+    </div>
+    <div class="grid-2">
+      <div class="field"><label>Total years of experience</label><input type="number" name="screening_total_years_experience" value="{{ form.screening_total_years_experience }}" placeholder="6"></div>
+      <div class="field">
+        <label>Default years for anything not listed below</label>
+        <input type="number" name="screening_default_unlisted_skill_years" value="{{ form.screening_default_unlisted_skill_years }}" placeholder="0">
+        <p class="help">0 is the safe default — never overclaim experience with anything you haven't listed.</p>
+      </div>
+    </div>
+
+    <h3>Years of experience per skill or area</h3>
+    <div id="skillyears-container">
+      {% for row in form.skill_years %}
+        <div class="repeat-row grid-2">
+          <div class="field"><label>Skill or area</label><input type="text" name="skillyears_key" value="{{ row.key }}" placeholder="e.g. b2b sales, python"></div>
+          <div class="field"><label>Years</label><input type="number" name="skillyears_val" value="{{ row.val }}" placeholder="6"></div>
+          <button type="button" class="btn small ghost row-remove" onclick="this.closest('.repeat-row').remove()">Remove</button>
+        </div>
+      {% endfor %}
+    </div>
+    <template id="skillyears-template">
+      <div class="repeat-row grid-2">
+        <div class="field"><label>Skill or area</label><input type="text" name="skillyears_key" placeholder="e.g. b2b sales, python"></div>
+        <div class="field"><label>Years</label><input type="number" name="skillyears_val" placeholder="6"></div>
+        <button type="button" class="btn small ghost row-remove" onclick="this.closest('.repeat-row').remove()">Remove</button>
+      </div>
+    </template>
+    <button type="button" class="btn small secondary" onclick="addRow('skillyears-container','skillyears-template')">+ Add skill</button>
+
+    <hr class="section-divider">
+    <div class="grid-2">
+      <div class="field"><label>Willing to relocate for a role?</label>{{ tri_select('screening_willing_to_relocate', form.screening_willing_to_relocate) }}</div>
+      <div class="field"><label>Willing — remote?</label>{{ tri_select('screening_willing_remote', form.screening_willing_remote) }}</div>
+    </div>
+    <div class="grid-2">
+      <div class="field"><label>Willing — hybrid?</label>{{ tri_select('screening_willing_hybrid', form.screening_willing_hybrid) }}</div>
+      <div class="field"><label>Willing — onsite?</label>{{ tri_select('screening_willing_onsite', form.screening_willing_onsite) }}</div>
+    </div>
+    <div class="grid-2">
+      <div class="field"><label>Have a bachelor's degree?</label>{{ tri_select('screening_has_bachelors_degree', form.screening_has_bachelors_degree) }}</div>
+      <div class="field"><label>Have a driver's license?</label>{{ tri_select('screening_has_drivers_license', form.screening_has_drivers_license) }}</div>
+    </div>
+    <div class="grid-2">
+      <div class="field"><label>Require sponsorship? (mirrors work authorization above)</label>{{ tri_select('screening_requires_sponsorship', form.screening_requires_sponsorship) }}</div>
+      <div class="field">
+        <label>Gender on application forms<span class="info" tabindex="0">ⓘ<span class="tip">Answered
+          exactly as set here — many forms (especially German ones) ask this as a required field, and
+          it also drives Mr/Ms (Herr/Frau) salutations. Male or female get filled on every form.
+          The other choices are selected when the form offers them; if a form requires an answer
+          that can't be matched, that application is skipped and logged, never guessed.</span></span></label>
+        <select name="screening_gender">
+          {% for g in ['prefer not to say', 'male', 'female', 'non-binary', 'other'] %}
+            <option value="{{ g }}" {{ 'selected' if form.screening_gender == g }}>{{ g }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <h2>Job searches<span class="req">*</span></h2>
+  <div class="card">
+    <p class="note" style="margin:0 0 12px;">What the daily run searches for on LinkedIn — at least one, up to {{ 6 }}.<span class="info" tabindex="0">ⓘ<span class="tip">Each row is one LinkedIn keyword search: the words, where, and which CV goes with it. Soon the Feedback page will suggest searches for your target role.</span></span></p>
+    <div id="searchq-container">
+      {% for row in form.search_queries %}
+        <div class="repeat-row">
+          <div class="grid-2">
+            <div class="field"><label>Search for</label><input type="text" name="sq_query" value="{{ row.query }}" placeholder="e.g. data analyst" required></div>
+            <div class="field"><label>Where</label><input type="text" name="sq_location" value="{{ row.location }}" placeholder="e.g. Germany" required></div>
+          </div>
+          <div class="grid-2">
+            <div class="field">
+              <label>Filters</label>
+              <select name="sq_filters">
+                {% for f in ['past 24 hours', 'past week', 'past 24 hours + remote', 'past week + remote'] %}
+                  <option value="{{ f }}" {{ 'selected' if row.filters == f }}>{{ f }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="field"><label>CV for this search</label>{{ resume_select('sq_resume', row.resume, cv_pool, True) }}</div>
+          </div>
+          <button type="button" class="btn small ghost row-remove" onclick="this.closest('.repeat-row').remove()">Remove</button>
+        </div>
+      {% endfor %}
+    </div>
+    <template id="searchq-template">
+      <div class="repeat-row">
+        <div class="grid-2">
+          <div class="field"><label>Search for</label><input type="text" name="sq_query" placeholder="e.g. data analyst" required></div>
+          <div class="field"><label>Where</label><input type="text" name="sq_location" placeholder="e.g. Germany" required></div>
+        </div>
+        <div class="grid-2">
+          <div class="field">
+            <label>Filters</label>
+            <select name="sq_filters">
+              <option value="past 24 hours">past 24 hours</option>
+              <option value="past week">past week</option>
+              <option value="past 24 hours + remote">past 24 hours + remote</option>
+              <option value="past week + remote">past week + remote</option>
+            </select>
+          </div>
+          <div class="field"><label>CV for this search</label>{{ resume_select('sq_resume', '', cv_pool, True) }}</div>
+        </div>
+        <button type="button" class="btn small ghost row-remove" onclick="this.closest('.repeat-row').remove()">Remove</button>
+      </div>
+    </template>
+    <button type="button" class="btn small secondary" id="add-searchq-btn" onclick="addSearchQuery()">+ Add search</button>
+
+    <hr class="section-divider">
+    <div class="grid-2">
+      <div class="field">
+        <label for="resume_file">Default CV<span class="info" tabindex="0">ⓘ<span class="tip">Used for any search above set to "Default CV". The newest uploaded CV is picked automatically if you leave this alone.</span></span></label>
+        {{ resume_select('resume_file', form.resume_file, cv_pool, False) }}
+      </div>
+      <div class="field">
+        <label for="mail_label">Gmail label for application mail</label>
+        <input type="text" id="mail_label" name="mail_label" value="{{ form.mail_label }}" placeholder="Job Applications">
+      </div>
+    </div>
+  </div>
+
+  <h2>Account credentials</h2>
+  <div class="card">
+    <p class="note" style="margin:0 0 12px;">A fake username and password, just to finish applications on job sites that need an account. Please don't use a real one.</p>
+    <div class="grid-2">
+      <div class="field">
+        <label for="acc_username">Username</label>
+        <input type="text" id="acc_username" name="acc_username" value="{{ form.acc_username }}" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="acc_password">Password</label>
+        <input type="password" id="acc_password" name="acc_password" value="{{ form.acc_password }}" autocomplete="new-password">
+      </div>
+    </div>
+  </div>
+
+  <div class="actions-row">
+    <button type="submit" class="btn">{{ 'Save profile' if not edit_mode else 'Save changes' }}</button>
+  </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function addRow(containerId, templateId) {
+  var tmpl = document.getElementById(templateId);
+  var container = document.getElementById(containerId);
+  container.appendChild(tmpl.content.cloneNode(true));
+}
+
+var MAX_SEARCH_QUERIES = 6;
+function addSearchQuery() {
+  var container = document.getElementById('searchq-container');
+  if (container.querySelectorAll('.repeat-row').length >= MAX_SEARCH_QUERIES) {
+    document.getElementById('add-searchq-btn').disabled = true;
+    return;
+  }
+  addRow('searchq-container', 'searchq-template');
+  if (container.querySelectorAll('.repeat-row').length >= MAX_SEARCH_QUERIES) {
+    document.getElementById('add-searchq-btn').disabled = true;
+  }
+}
+
+function renderTags(value) {
+  var preview = document.getElementById('tag-preview');
+  preview.innerHTML = '';
+  value.split(',').map(function (s) { return s.trim(); }).filter(Boolean).forEach(function (tag) {
+    var span = document.createElement('span');
+    span.textContent = tag;
+    preview.appendChild(span);
+  });
+}
+document.addEventListener('DOMContentLoaded', function () {
+  var el = document.getElementById('technical_stack');
+  if (el) renderTags(el.value);
+  var sq = document.getElementById('searchq-container');
+  if (sq && sq.querySelectorAll('.repeat-row').length === 0) {
+    addSearchQuery();  // at least one search is required — start with an empty row
+  }
+  if (sq && sq.querySelectorAll('.repeat-row').length >= MAX_SEARCH_QUERIES) {
+    document.getElementById('add-searchq-btn').disabled = true;
+  }
+});
+</script>
+{% endblock %}

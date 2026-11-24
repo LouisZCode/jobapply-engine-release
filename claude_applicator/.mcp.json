@@ -1,0 +1,25 @@
+{
+  "mcpServers": {
+    "playwright": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@playwright/mcp@0.0.80",
+        "--cdp-endpoint",
+        "http://127.0.0.1:9222",
+        "--output-dir",
+        "./output"
+      ]
+    },
+    "sqlite": {
+      "command": "uvx",
+      "args": [
+        "--with",
+        "mcp==1.6.0",
+        "mcp-server-sqlite",
+        "--db-path",
+        "applications.db"
+      ]
+    }
+  }
+}

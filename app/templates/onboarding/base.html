@@ -1,0 +1,46 @@
+{# onboarding/base.html — wizard chrome. Deliberately NOT extending layout.html:
+   the sidenav is the "app is set up" navigation; a first-run wizard gets its own
+   calm single-column frame with a progress rail, using the same tokens/classes. #}
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ step_title }} — Getting started · Job Apply</title>
+<link rel="stylesheet" href="{{ url_for('static', path='style.css') }}?v={{ static_version }}">
+<script>
+(function () {
+  try { if (localStorage.getItem('ja-theme') === 'dark') document.documentElement.setAttribute('data-theme','dark'); } catch (e) {}
+})();
+</script>
+</head>
+<body class="wizard-body">
+<div class="wizard-frame">
+  <header class="wizard-top">
+    <div class="brand"><span class="brand-mark">JA</span>Job Apply</div>
+    <a class="wizard-skip" href="{{ url_for('onboarding_dismiss') }}">Not now — open the app</a>
+  </header>
+
+  <div class="wizard-progress" role="progressbar" aria-valuemin="1" aria-valuemax="{{ steps_total }}" aria-valuenow="{{ step_index + 1 }}">
+    {% for key, title, purpose in steps %}
+      {% set i = loop.index0 %}
+      <div class="wp-step {{ 'done' if i < step_index else ('now' if i == step_index else '') }}">
+        <span class="wp-dot">{{ '✓' if i < step_index else i + 1 }}</span>
+        <span class="wp-label">{{ title }}</span>
+      </div>
+      {% if not loop.last %}<div class="wp-line {{ 'done' if i < step_index }}"></div>{% endif %}
+    {% endfor %}
+  </div>
+
+  <main class="wizard-card">
+    {% if error %}<div class="banner bad">{{ error }}</div>{% endif %}
+    {% block step %}{% endblock %}
+  </main>
+
+  <footer class="wizard-foot">
+    Step {{ step_index + 1 }} of {{ steps_total }} · your answers stay on this Mac
+  </footer>
+</div>
+{% block scripts %}{% endblock %}
+</body>
+</html>

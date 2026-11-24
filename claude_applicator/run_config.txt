@@ -1,0 +1,46 @@
+# claude_applicator — RUN SWITCHES (single source of truth)
+#
+# The routine reads THIS FILE FRESH from disk at the start of every run (CLAUDE.md Preflight,
+# step 1) and treats these values as authoritative for the whole run. CLAUDE.md only EXPLAINS
+# them — it never holds their values — so editing a switch here always takes effect on the next
+# run, even mid-session. The switch that matters most is MODE (prepare vs live).
+
+# MODE: prepare is the product safety default — the agent fills every application out and
+# walks to the final "Submit" screen, then STOPS for a human to review and send it. Nothing
+# is ever actually submitted in this mode. Flip to `live` yourself only after you've reviewed
+# a batch of prepared applications and trust the agent's judgment on your profile/queries.
+MODE: prepare
+MAX_APPLIES_PER_RUN: 3         # warm-up default (DAILY_APPLY_CAP still bounds the rolling 24h) —
+                                # raise this once you trust the pipeline on your own profile/queries
+                                # (e.g. to 8-10 for a full daily round).
+DAILY_APPLY_CAP: 13            # rolling 24h, enforced via the DB across ALL runs that day
+ACTION_DELAY_SECONDS: 10-20    # randomized pause before EVERY page action
+APPLY_GAP_SECONDS: 90-240      # randomized extra pause between applications
+RUN_WINDOW_LOCAL: 05:00-20:00  # active daytime hours; outside this window, do not apply
+
+# Reapply policy: skip a company ONLY if it interviewed us and THEN rejected us within this many
+# days (the one case where re-applying makes no sense). Every other company stays fair game.
+REAPPLY_INTERVIEW_REJECT_COOLDOWN_DAYS: 90
+
+# Duplicate-posting policy: a job re-posted under a NEW job_id at the SAME company within this many
+# days is treated as the SAME role, not a fresh opening, and skipped (job_id-only dedup can't catch
+# a repost). Genuinely different roles at the same company are unaffected.
+DUPLICATE_POSTING_WINDOW_DAYS: 14
+
+# Ghost-company policy (added 2026-07-31): a company we have applied to at least GHOST_MIN_APPLIES
+# times with EVERY row still outcome='no_response', and whose OLDEST apply is at least
+# GHOST_SEASONING_DAYS old, is a "ghost" — it swallows applications without ever answering, and we
+# stop spending tokens on it. Self-lifting: one real response (even a rejection) moves a row off
+# no_response and the company drops off the list on the next run.
+GHOST_MIN_APPLIES: 3
+GHOST_SEASONING_DAYS: 45
+
+# Writer tool (QA-001/WRITE-001): custom free-text screener questions and cover letters that have
+# no profile.yaml answer are sent to writer/write.sh (grounded in qa_bank.md; skips if ungrounded).
+# WRITING_MODE governs COVER LETTERS only (short screener answers are always usable directly):
+#   review -> generate the letter, save it under output/cover_letters/, but do NOT submit that
+#             application; log skipped_writer_review with the saved path (human approves quality
+#             first; flip to auto after enough good samples).
+#   auto   -> paste/attach the generated letter and submit normally.
+# Product safety default: review — a human approves letter quality before letters go live.
+WRITING_MODE: review

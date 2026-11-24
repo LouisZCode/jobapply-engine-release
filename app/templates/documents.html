@@ -1,0 +1,120 @@
+{% extends "layout.html" %}
+{% block title %}Background — Job Apply{% endblock %}
+{% block content %}
+<h1>Background<span class="info" tabindex="0">ⓘ<span class="tip">Your work history in your own
+  words — the only material the app may use when it answers questions for you. Write or paste
+  it, then Generate: the AI turns it into a grounded answer bank. Nothing is ever invented — a gap
+  in what you write becomes a skipped question on an application, never a guessed answer.</span></span></h1>
+
+{% if banner %}
+  <div class="banner {{ 'ok' if banner.ok else 'bad' }}">
+    {{ banner.message }}
+    {% if show_home_link %}<a href="{{ url_for('home') }}" style="margin-left:8px;">Back to Home</a>{% endif %}
+  </div>
+{% endif %}
+
+<div class="card">
+  <h2>Answer bank</h2>
+
+  {% if cv_pdfs %}
+    <form method="post" action="{{ url_for('documents_background_from_cv') }}">
+      <div class="grid-2" style="align-items:end;">
+        <div class="field" style="margin:0;">
+          <label for="cv_filename">Start from a CV in the system</label>
+          {% if cv_pdfs | length > 1 %}
+            <select id="cv_filename" name="cv_filename">
+              {% for pdf in cv_pdfs %}
+                <option value="{{ pdf }}">{{ pdf }}</option>
+              {% endfor %}
+            </select>
+          {% else %}
+            <input type="hidden" name="cv_filename" value="{{ cv_pdfs[0] }}">
+            <span class="static-value">{{ cv_pdfs[0] }}</span>
+          {% endif %}
+        </div>
+        <div><button type="submit" class="btn small secondary">Use this CV's text</button></div>
+      </div>
+    </form>
+    <hr class="section-divider" style="margin:16px 0;">
+  {% endif %}
+
+  <form method="post" action="{{ url_for('documents_answer_bank_generate') }}">
+    <div class="field">
+      <label for="raw_background">Your background</label>
+      <textarea id="raw_background" name="raw_background" rows="10"
+        placeholder="Paste your CV text, or just write it out: I'm Maria Musterfrau, I've spent the last 5 years as a...">{{ raw_background }}</textarea>
+    </div>
+    <div class="actions-row">
+      {% if profile_ready %}
+        <button type="submit" class="btn" {{ 'disabled' if job_status.running }}>
+          {{ 'Regenerate answer bank' if qa_bank_exists else 'Generate answer bank' }}
+        </button>
+        {% if qa_bank_exists %}<span class="note">Replaces the editor below — the saved file changes only when you press Save.</span>{% endif %}
+      {% else %}
+        <span class="note">Save your <a href="{{ url_for('profile_page') }}">Profile</a> first, then generate.</span>
+      {% endif %}
+    </div>
+  </form>
+
+  {% set panel_names = ['answer_bank', 'cv_generate'] %}
+  {% set panel_back = 'documents' %}
+  {% include "_job_panel.html" %}
+
+  <hr class="section-divider">
+
+  <form method="post" action="{{ url_for('documents_answer_bank_save') }}">
+    <div class="field">
+      <label for="qa_bank_editor">{{ 'Your answer bank (editable)' if qa_bank_exists else 'Generated answer bank — appears here when the job finishes' }}</label>
+      <textarea id="qa_bank_editor" name="qa_bank_editor" rows="18">{{ qa_bank_editor_initial }}</textarea>
+    </div>
+    <div class="actions-row">
+      <button type="submit" class="btn">Save answer bank</button>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <h2>CV</h2>
+  {% if cv_pdfs %}
+    <ul class="checklist">
+      {% for pdf in cv_pdfs %}
+        <li>
+          <span class="checklist-label">{{ pdf }}{% if default_resume == 'data/' ~ pdf %} <span class="note">· default</span>{% endif %}</span>
+          {% if default_resume != 'data/' ~ pdf %}
+            <form method="post" action="{{ url_for('documents_cv_use_default') }}">
+              <input type="hidden" name="filename" value="{{ pdf }}">
+              <button type="submit" class="btn small ghost">Make default</button>
+            </form>
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+    <hr class="section-divider" style="margin:14px 0;">
+  {% endif %}
+
+  <form method="post" action="{{ url_for('documents_cv_upload') }}" enctype="multipart/form-data">
+    <div class="grid-2" style="align-items:end;">
+      <div class="field" style="margin:0;">
+        <label for="cv_pdf">{{ 'Upload another CV (PDF)' if cv_pdfs else 'Upload your CV (PDF)' }}</label>
+        <input type="file" id="cv_pdf" name="cv_pdf" accept="application/pdf">
+      </div>
+      <div><button type="submit" class="btn secondary">Upload</button></div>
+    </div>
+  </form>
+
+  <div class="actions-row" style="margin-top:16px;">
+    <form method="post" action="{{ url_for('documents_cv_generate') }}">
+      <button type="submit" class="btn secondary" {{ 'disabled' if not (skill_answer_bank_exists and skill_rendered) or job_status.running }}>
+        Build a CV with AI
+      </button>
+    </form>
+    {% if not skill_answer_bank_exists %}
+      <span class="note">Needs a saved answer bank first.</span>
+    {% elif not skill_rendered %}
+      <span class="note">Needs a saved <a href="{{ url_for('profile_page') }}">Profile</a> first.</span>
+    {% else %}
+      <span class="note">Writes a PDF from your answer bank into the CV pool — a few minutes.</span>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,119 @@
+{% extends "layout.html" %}
+{% block title %}Home — Job Apply{% endblock %}
+{% block content %}
+<h1>Home</h1>
+
+{% if setup_warning %}
+  <div class="banner bad">
+    <strong>Setup didn't finish on its own — {{ setup_warning.message or "something went wrong." }}</strong>
+    {% if setup_warning.stdout or setup_warning.stderr %}
+      <pre class="log">{{ (setup_warning.stdout ~ "\n" ~ setup_warning.stderr).strip() }}</pre>
+    {% endif %}
+  </div>
+{% endif %}
+
+<div class="option-cards">
+  <div class="option-card">
+    <span class="status-badge {{ 'done' if profile_cv_done else '' }}">{{ '✓' if profile_cv_done else '' }}</span>
+    <h2>Your profile &amp; CV</h2>
+    <a class="btn {{ 'secondary' if profile_cv_done else '' }}" href="{{ profile_cv_href }}">{{ profile_cv_label }}</a>
+  </div>
+
+  <div class="option-card">
+    <span class="status-badge {{ 'done' if status.claude_connected else '' }}">{{ '✓' if status.claude_connected else '' }}</span>
+    <h2>Connect an AI</h2>
+    <a class="btn {{ 'secondary' if status.claude_connected else '' }}" href="{{ claude_href }}">{{ claude_label }}</a>
+  </div>
+
+  <div class="option-card">
+    <span class="status-badge {{ 'done' if status.linkedin_confirmed else '' }}">{{ '✓' if status.linkedin_confirmed else '' }}</span>
+    <h2>Connect to LinkedIn</h2>
+    <a class="btn {{ 'secondary' if status.linkedin_confirmed else '' }}" href="{{ linkedin_href }}">{{ linkedin_label }}</a>
+  </div>
+</div>
+
+<div class="card">
+  {% if ready %}
+    <div class="ready-row"><span class="status-badge done">✓</span> Ready to run</div>
+    <form method="post" action="{{ url_for('run_test') }}">
+      <button type="submit" class="btn" {{ 'disabled' if job_status.running }}>Run a test now</button>
+    </form>
+    <p class="note" style="margin:8px 0 0;">Just a test. Nothing is submitted.</p>
+  {% else %}
+    <div class="ready-row"><span class="status-badge">·</span> Not ready yet</div>
+    <ul style="margin:0; padding-left:18px;">
+      {% for item in readiness_items if not item.ok %}
+        <li><a href="{{ item.href }}">{{ item.label }}</a></li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+
+  {% if test_run_banner and not test_run_banner.ok %}
+    <div class="banner bad" style="margin-top:12px;">{{ test_run_banner.message }}</div>
+  {% endif %}
+
+  {% set panel_names = ['test_run'] %}
+  {% set panel_back = 'home' %}
+  {% include "_job_panel.html" %}
+</div>
+
+<div class="card">
+  <div class="switch-row">
+    <form method="post" action="{{ url_for('power_keep_awake') }}" id="keep-awake-form">
+      <input type="hidden" name="turn" value="{{ 'off' if keep_awake.on else 'on' }}">
+      <label class="switch" title="{{ 'On — click to turn off' if keep_awake.on else 'Off — click to turn on' }}">
+        <input type="checkbox" {{ 'checked' if keep_awake.on }} onchange="document.getElementById('keep-awake-form').submit()">
+        <span class="slider"></span>
+      </label>
+    </form>
+    <div class="switch-text">
+      <strong>Keep this Mac awake for the daily run</strong>
+      <span class="note">
+        {% if keep_awake.on %}
+          On — wakes at {{ keep_awake.time }} every day.
+        {% else %}
+          Off — if this Mac is asleep at {{ schedule_run_time }}, the daily run can't start.
+        {% endif %}
+        Daily run at {{ schedule_run_time }}. To change these, go to <a href="{{ url_for('schedule_page') }}">Schedule</a>.
+      </span>
+    </div>
+  </div>
+  {% if keep_awake_result and not keep_awake_result.ok %}
+    <div class="banner bad" style="margin:12px 0 0;">{{ keep_awake_result.message or (keep_awake_result.stderr or "")|truncate(200) }}</div>
+  {% elif keep_awake_result and keep_awake_result.ok and keep_awake_result.stub %}
+    <div class="banner warn" style="margin:12px 0 0;">{{ keep_awake_result.message }}</div>
+  {% endif %}
+  <hr class="section-divider" style="margin:14px 0;">
+  <div class="switch-row">
+    <span class="status-badge {{ 'ok' if agents.apply.loaded else ('warn' if agents.apply.installed else 'bad') }}">
+      {{ '●' if agents.apply.loaded else '○' }}
+    </span>
+    <div class="switch-text">
+      <strong>Daily run {{ 'scheduled' if agents.apply.loaded else ('paused' if agents.apply.installed else 'not installed') }}</strong>
+      <span class="note">
+        {% if health.exists %}
+          Last clean run: {{ health.apply.last_ok_end or 'none yet' }} ·
+          mail sweep: {{ health.sweep.last_ok_end or 'never' }}{% if health.sweep.stale %} (stale){% endif %} ·
+        {% endif %}
+        <a href="{{ url_for('schedule_page') }}">Schedule &amp; health details</a>
+      </span>
+    </div>
+  </div>
+</div>
+
+<p class="note">
+  {% if usage.all.runs %}
+    AI usage — today: {{ fmt_tokens(usage.today.total) }} tokens{% if usage.today.runs %} in {{ usage.today.runs }} run{{ '' if usage.today.runs == 1 else 's' }}{% endif %} ·
+    all time: {{ fmt_tokens(usage.all.total) }} tokens in {{ usage.all.runs }} run{{ '' if usage.all.runs == 1 else 's' }} (≈ ${{ '%.2f' % usage.all.cost_usd }} API-equivalent).
+  {% else %}
+    AI usage — nothing recorded yet.
+  {% endif %}
+  {% if claude_usage.state == 'limited' %}
+    <strong>Plan limit reached{{ (' — resets around ' ~ claude_usage.resets) if claude_usage.resets }}.</strong>
+  {% endif %}
+  <span class="info" tabindex="0">ⓘ<span class="tip">Counted from each run's own record: input, output and cache tokens across everything the AI did in that run (tool calls, sub-agents, mail agent, the daily applies). The AI plan doesn't expose remaining percentage to apps, so there's no allowance bar — if a run hits your plan limit it pauses and the next scheduled run picks up again. Full breakdown on the Dashboard.</span></span>
+</p>
+
+<p class="advanced-links">Advanced: <a href="{{ url_for('schedule_page') }}">Schedule</a> &middot;
+  <a href="{{ url_for('dashboard_page') }}">Dashboard</a></p>
+{% endblock %}

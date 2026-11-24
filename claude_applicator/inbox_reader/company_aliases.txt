@@ -1,0 +1,5 @@
+# alias => canonical company name (as it appears in applications.company)
+# one per line; case-insensitive; used when an ATS/VC sends mail under a different
+# brand than the company applied to (e.g. an investor/portfolio mailer, or a
+# white-labeled ATS sending under the fund's name rather than the hiring company).
+Expedition Growth Capital => Nesto Software GmbH

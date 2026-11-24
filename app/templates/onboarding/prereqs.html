@@ -1,0 +1,27 @@
+{% extends "onboarding/base.html" %}
+{% block step %}
+<h1>First, your Mac</h1>
+<p class="wizard-lede">Three one-time checks. Anything red has a fix below it — do the
+fix, then re-check.</p>
+
+<div class="card">
+  {% for c in checks %}
+  <div class="checklist">
+    <span class="status-badge {{ 'ok' if c.ok else 'bad' }}">{{ 'OK' if c.ok else 'Needs a fix' }}</span>
+    <div>
+      <strong>{{ c.label }}</strong>
+      {% if not c.ok %}<p class="note" style="margin:6px 0 0;">{{ c.detail }}</p>{% endif %}
+    </div>
+  </div>
+  {% endfor %}
+  <form method="post" action="{{ url_for('onboarding_recheck') }}" style="margin-top:12px;">
+    <button type="submit" class="btn small secondary">Re-check</button>
+  </form>
+</div>
+
+<form method="post" action="{{ url_for('onboarding_step') }}" class="wizard-nav">
+  <input type="hidden" name="step" value="prereqs">
+  {% set all_ok = checks | map(attribute='ok') | select('equalto', false) | list | length == 0 %}
+  <button type="submit" class="btn primary">{{ 'Continue →' if all_ok else "Continue anyway — I'll fix the red ones →" }}</button>
+</form>
+{% endblock %}

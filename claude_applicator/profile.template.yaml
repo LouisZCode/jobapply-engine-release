@@ -1,0 +1,314 @@
+# ==============================================================================
+# profile.yaml — YOUR answer bank for the automated job-application pipeline.
+# ==============================================================================
+# Copy this file to claude_applicator/profile.yaml (that exact path — it is
+# git-ignored, so your personal data never gets committed) and fill it in.
+# Then run: python3 setup/render_templates.py
+#
+# The applicator agent fills every application field from this file ONLY. If a
+# required answer is missing here, the agent skips the job and logs it rather
+# than invent one — so an unfilled field doesn't cause wrong answers, it just
+# causes fewer applications. Fill in what you're comfortable automating first;
+# you can always come back and add more later (re-run render_templates.py
+# after any edit).
+#
+# Location and work-permit fields below are pure data, not a fixed assumption — the relevance
+# gate (claude_applicator/CLAUDE.md step 4.3) filters purely from what you put in `location.*`
+# and `work_authorization.*`. Search areas are independent again: each `job_search.search_
+# queries[]` entry carries its own `location`, which can be anywhere LinkedIn accepts — including
+# a destination you're relocating TO, not necessarily where you live today.
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# IDENTITY — REQUIRED. Who you are and how the agent reaches / represents you.
+# ------------------------------------------------------------------------------
+identity:
+  full_name: "CHANGEME Full Name"          # REQUIRED. Used verbatim on every application and CV.
+
+  # EMAIL IS PATH-DEPENDENT — the agent picks one of these two addresses based on
+  # WHERE the application form lives, never by preference:
+  #   - Easy Apply / any linkedin.com form  -> `email`          (the address tied to your LinkedIn login)
+  #   - External ATS (any non-linkedin host) -> `email_external` (used for external forms + new account sign-ups)
+  # If you only have ONE email address, put the SAME address in both fields below.
+  email: "CHANGEME@example.com"            # REQUIRED. LinkedIn / Easy Apply forms ONLY.
+  email_external: "CHANGEME@example.com"   # REQUIRED. External ATS forms + account sign-ups. Ideally an
+                                            # inbox you can read (verification links/replies land here).
+  phone: ""                                # REQUIRED for most forms. E.164-ish is safest, e.g. "+1 555 0100".
+  portfolio: ""                            # optional — personal site/portfolio URL, leave blank if none.
+  github: ""                               # optional — GitHub profile URL, leave blank if none.
+  linkedin: ""                             # optional — your own LinkedIn profile URL (not the job's).
+
+# Credentials the agent may use to REGISTER A NEW account on an external ATS
+# (Workday, join.com, etc.) when a job requires sign-up before you can apply.
+# The agent always signs up as `identity.full_name` / `identity.email_external`
+# (never `identity.email`) — reusing this password across throwaway ATS
+# sign-ups is fine, but it must be a password you have NEVER used anywhere
+# that actually matters (email, banking, your real accounts). Leave `password`
+# blank if you'd rather the agent skip any job that requires creating an
+# account — it will never invent one for you.
+account_credentials:
+  username: ""      # optional — only used if a site demands a username distinct from the email.
+  password: ""       # THROWAWAY password only. Empty = agent skips sign-up-required jobs (safe default).
+
+# Negative constraints — old contact details that might still be floating
+# around on stale CVs, old LinkedIn exports, or cached profile data. Listing
+# them here tells the agent "never type this value, even if you see it
+# somewhere" — a guard against accidentally submitting a dead phone/email.
+do_not_use:
+  phones: []   # e.g. ["+1 555 0199"] — old numbers to actively avoid.
+  emails: []   # e.g. ["old.address@example.com"] — old addresses to actively avoid.
+
+# ------------------------------------------------------------------------------
+# LOCATION — REQUIRED. Where you are and what commute/relocation you'll accept.
+# ------------------------------------------------------------------------------
+location:
+  current_city: "CHANGEME City"    # REQUIRED. Your current home city.
+  street_address: ""               # optional — some external ATS forms (e.g. GoHiring, common in the
+                                    # German market) require a street address; leave blank if you'd
+                                    # rather skip those fields.
+  postal_code: ""                  # optional — postal/ZIP code, see street_address note above.
+  country: "CHANGEME Country"      # REQUIRED. Your current country of residence.
+  relocating_to: null              # null = not currently relocating. Moving somewhere? Set this to a
+                                    # city/country string AND point your job_search.search_queries
+                                    # locations at the destination (not where you are now).
+  relocation_date: null            # null = n/a. Set a date string (e.g. "2026-11-01") if relocating_to is set.
+  remote_preference: ""            # free text, e.g. "remote-first, open to occasional travel" — descriptive
+                                    # only, not machine-read; helps a human (or the writer tool) frame answers.
+  travel: ""                       # free text, e.g. "occasional travel/offsites OK" — descriptive only.
+  note: ""                         # optional free-text note the agent may reference (e.g. "based regardless
+                                    # of remote/onsite" or any other context worth stating once, here).
+  must_be_based_in: null           # string or null. HARD gate: the country/region/area you must remain
+                                    # based in — roles that would require you to be based outside this
+                                    # area are skipped. null or "" = anywhere (no geographic restriction).
+  onsite_hybrid_cities: []         # HARD gate: list of cities where you WILL accept a hybrid/onsite role,
+                                    # e.g. ["Berlin"]. Remote roles are governed by must_be_based_in
+                                    # instead — this list only matters for hybrid/onsite postings.
+  willing_to_relocate: false       # true/false (default false). false = only jobs compatible with your
+                                    # base area / onsite_hybrid_cities; true = relocation offers are
+                                    # acceptable — also widen must_be_based_in (or set it null) and point
+                                    # your search_queries locations at the target locations.
+
+# ------------------------------------------------------------------------------
+# WORK AUTHORIZATION — REQUIRED. High-stakes: the agent fills these exactly,
+# and skips-and-logs rather than guess if a form asks something not covered
+# here. Get this section right before running in `live` mode.
+# ------------------------------------------------------------------------------
+work_authorization:
+  authorized_in: []                    # list of strings — countries/areas where you hold the right to
+                                        # work today, e.g. ["Germany"] or ["EU"]. Used to answer
+                                        # authorization questions truthfully.
+  visa_sponsorship_required: null      # true/false — do you need an employer to sponsor a visa/work permit?
+  nationality: "CHANGEME"              # DATA field only (country-list Nationality dropdowns, passport/ID
+                                        # fields) — always answered TRUTHFULLY. See citizenship_gate_pick_citizen
+                                        # below for the SEPARATE policy on gate-style yes/no questions.
+  eu_citizen: null                     # true/false — are you an EU citizen? Optional data field, relevant
+                                        # mainly to EU-area users; leave null if not applicable.
+  right_to_work_eu: null               # true/false — do you hold an unrestricted right to work in the EU
+                                        # (e.g. via a permanent residence permit, spouse visa, etc.), even if
+                                        # you are not an EU citizen? Optional data field, relevant mainly to
+                                        # EU-area users; leave null if not applicable.
+  work_permit_type: ""                 # short label if relevant, e.g. "Permanent residence" / "Blue Card" /
+                                        # "Work permit" / "EU citizen" — used to answer "type of permit" dropdowns.
+  work_permit_note: >                  # free-text "describe your work authorization" answer, e.g. a sentence
+    CHANGEME — describe your work authorization in your own words (duration, restrictions,
+    sponsorship needs) if a form asks for a free-text explanation.
+  # citizenship_gate_pick_citizen — POLICY, not personal data. Some application forms ask a
+  # binary/short-list "citizenship" question whose REAL purpose is "does the employer need to
+  # do anything to hire you?" (e.g. "citizen of <country> / other", "EU citizen / requires
+  # sponsorship"). If you hold unrestricted work rights WITHOUT citizenship (e.g. via a
+  # permanent residence/spouse permit) you may consider such gate-style questions a proxy for
+  # "no employer action needed" and choose the citizen-coded option — while true DATA fields
+  # (a country-list Nationality dropdown, a passport field) always stay truthful either way.
+  # This is a judgment call with real accuracy implications: default is `false` (never pick a
+  # citizenship option you don't hold) — only flip to `true` if you understand and accept the
+  # gate-vs-data distinction above. Free-text/prose answers NEVER claim citizenship regardless
+  # of this setting; they describe your actual permit/status.
+  citizenship_gate_pick_citizen: false
+
+# ------------------------------------------------------------------------------
+# COMPENSATION — REQUIRED for the forms that ask. `floor` is SECRET: the agent
+# NEVER types it into any field or written answer, on any form, ever — it exists
+# only so the agent knows your walk-away point if you extend this file later.
+# Only `forced_single_number` and `range_or_text_field` are ever actually typed.
+# ------------------------------------------------------------------------------
+compensation:
+  currency: "CHANGEME"                 # ISO code, e.g. "EUR", "USD", "GBP".
+  floor: 0                             # SECRET. Your real walk-away minimum. NEVER entered on any form.
+  target: 0                            # your real target — informational, not directly typed anywhere.
+  range_low: 0                         # informational.
+  range_high: 0                        # informational.
+  forced_single_number: 0              # REQUIRED for single-number salary fields. What actually gets typed.
+  range_or_text_field: "CHANGEME"      # REQUIRED for range/free-text salary fields, e.g. "65,000-75,000".
+  strategy_note: >                     # optional free-text negotiation guidance for the agent/writer to
+    CHANGEME — optional notes on how you want salary questions handled (e.g. "ask their band
+    first when possible; state the number once, no volunteering flexibility").
+
+# ------------------------------------------------------------------------------
+# LANGUAGES / EDUCATION / CERTIFICATIONS — used to answer screening questions
+# and to ground the CV-builder skill and writer tool. Empty = agent skips any
+# question these would answer, rather than guessing.
+# ------------------------------------------------------------------------------
+languages: []
+  # Format (one entry per language you speak), e.g.:
+  # - { language: English, level: native }
+  # - { language: German,  level: C1 }
+
+education: []
+  # Format, e.g.:
+  # - { degree: "BSc Computer Science", school: "CHANGEME University", years: "2016-2020" }
+
+certifications: []
+  # Format: a flat list of strings, e.g.:
+  # - "CHANGEME Certification, Issuing Body (year)"
+
+# ------------------------------------------------------------------------------
+# EXPERIENCE — your work history. `most_recent` is used most often (recency /
+# current-status screening questions); `prior_companies` is a flat list for
+# background context; `summary` is a one-line elevator pitch.
+# ------------------------------------------------------------------------------
+experience:
+  most_recent:
+    company: "CHANGEME Company"
+    title: "CHANGEME Title"
+    industry: "CHANGEME industry, e.g. B2B SaaS"
+    mode: "CHANGEME remote|hybrid|onsite"
+    start: "CHANGEME e.g. 2022"
+    end: "CHANGEME e.g. 2026-02, or \"present\" if still there"
+    highlight: >
+      CHANGEME — one concrete, metric-driven achievement from this role.
+  prior_companies: []           # flat list of former employer names, e.g. ["Acme Corp", "Globex"].
+  summary: "CHANGEME — one-line summary of your professional background."
+
+# ------------------------------------------------------------------------------
+# PORTFOLIO PROJECTS / TECHNICAL STACK — optional but strongly recommended if
+# you're targeting technical roles; feeds screening answers and CV building.
+# ------------------------------------------------------------------------------
+portfolio_projects: []
+  # Format, e.g.:
+  # - name: "CHANGEME Project Name"
+  #   desc: >
+  #     One or two sentences: what it does, the stack, and any concrete traction
+  #     (paying users, live in production, etc.) if true.
+
+technical_stack: []
+  # Flat list of strings, e.g.: ["Python", "PostgreSQL", "Docker"]
+
+# Default/fallback CV path (relative to claude_applicator/, e.g. "data/CHANGEME_CV.pdf").
+# The CV actually uploaded is chosen per search query (see job_search.search_queries[].resume)
+# or per job title (see job_search.cv_by_title); this is only the fallback when neither applies.
+# Put your actual PDF under claude_applicator/data/ (git-ignored — never committed).
+resume_file: "data/CHANGEME_Resume.pdf"
+
+# ------------------------------------------------------------------------------
+# SCREENING — answers to short/numeric application screener questions. The
+# agent matches question text to these fields (see claude_applicator/CLAUDE.md
+# "Field rules" for the exact matching rules: skill_years is fuzzy/case-
+# insensitive; a skill NOT listed falls back to default_unlisted_skill_years;
+# "total years of experience" -> total_years_experience, etc.). Anything a
+# form asks that isn't covered here AND isn't elsewhere in this file gets
+# skipped and logged — never invented.
+# ------------------------------------------------------------------------------
+screening:
+  total_years_experience: 0          # REQUIRED-ish. Your real total professional years.
+  default_unlisted_skill_years: 0    # years claimed for any skill NOT in skill_years below. 0 is the safe default
+                                      # (never overclaim experience with a skill you haven't listed).
+  skill_years: {}
+    # Map of skill/area/technology name (lowercase) -> years of experience, fuzzy-matched
+    # against "years of experience with/in <X>?" screener questions. Example:
+    # skill_years:
+    #   b2b sales: 6
+    #   python: 2
+  notice_period: "CHANGEME, e.g. \"available immediately\" or \"4 weeks notice\""
+  earliest_start_date: "CHANGEME, e.g. \"2026-11-01\""   # your own choice — the date you'd actually start.
+  willing_to_relocate: null    # true/false — will you relocate for a job? (separate from location.willing_to_relocate)
+  willing_remote: null         # true/false
+  willing_hybrid: null         # true/false
+  willing_onsite: null         # true/false
+  has_bachelors_degree: null   # true/false
+  has_drivers_license: null    # true/false, or leave null if you'd rather the agent skip-and-log this question.
+  requires_sponsorship: null   # true/false — mirrors work_authorization.visa_sponsorship_required; kept as
+                                # its own field because some forms ask it as a distinct screener question.
+  gender: "prefer not to say"  # answered EXACTLY on any gender/Geschlecht field and drives Mr/Ms
+                                # (Herr/Frau) salutations. "male"/"female" get filled everywhere,
+                                # including required fields. Any other value ("prefer not to say",
+                                # "non-binary", "other") is selected when the form offers it; when a
+                                # REQUIRED field has no matching option the application is skipped
+                                # and logged — the agent never picks a substitute or guesses.
+
+# ------------------------------------------------------------------------------
+# JOB_SEARCH — REQUIRED (search_queries at minimum). What the agent searches
+# for, which CV it uploads per job, and which companies/titles it skips.
+# ------------------------------------------------------------------------------
+job_search:
+  # HOW SEARCHES WORK: each entry is { query, location, filters, resume }. `query` is the
+  # LinkedIn keyword search term. `location` is the LinkedIn location-box value (a city, or a
+  # country name, or "Remote") — entries are free, any country/city LinkedIn accepts, including
+  # a relocation destination if you're mid-move (see location.relocating_to above) rather than
+  # where you live today. `filters` is a short natural-language combo the agent maps to
+  # LinkedIn's REAL search URL parameters — use exactly these phrases:
+  #   "past 24 hours"        -> LinkedIn's "Date posted: Past 24 hours" filter
+  #   "past week"             -> LinkedIn's "Date posted: Past week" filter
+  #   "+ remote"              -> add LinkedIn's "Remote" workplace-type filter
+  #   (an entry whose filters string omits "remote" gets NO remote filter, so hybrid/onsite
+  #    roles in that location surface too — useful for a "local jobs near me" query)
+  # `resume` is the CV file (relative to claude_applicator/) uploaded for jobs this query
+  # surfaces, UNLESS job_search.cv_by_title below matches the job's title first.
+  # ORDER MATTERS: queries run in list order, each one fully exhausted before the next starts.
+  # EXAMPLES BELOW — replace with your own queries; delete or add entries freely (2-6 is typical).
+  search_queries:
+    - query: "AI engineer"                                    # EXAMPLE — replace
+      location: "CHANGEME Country or City"
+      filters: "past 24 hours + remote"
+      resume: "data/CHANGEME_Resume.pdf"
+    - query: "data analyst"                                   # EXAMPLE — replace
+      location: "CHANGEME Country or City"
+      filters: "past week + remote"
+      resume: "data/CHANGEME_Resume.pdf"
+    - query: "software engineer"                               # EXAMPLE — replace; local/hybrid catch (no remote filter)
+      location: "CHANGEME Your City"
+      filters: "past 24 hours"
+      resume: "data/CHANGEME_Resume.pdf"
+
+  # CV-by-title override — takes PRECEDENCE over the per-query `resume` above: if a job TITLE
+  # contains one of these keywords (case-insensitive substring), upload the mapped CV no matter
+  # which search query surfaced the job. First match wins if a title matches more than one
+  # keyword, so put more specific keywords before broad catch-alls. EXAMPLES — replace with your own.
+  cv_by_title:
+    - { keyword: "data scientist",     resume: "data/CHANGEME_DataScience_CV.pdf" }   # EXAMPLE — replace
+    - { keyword: "backend engineer",   resume: "data/CHANGEME_Backend_CV.pdf" }        # EXAMPLE — replace
+
+  # Manual company blocklist — companies you deliberately do NOT want the agent to apply to
+  # right now (e.g. you're already in a process with them, or you've ruled them out). The
+  # agent skips matching cards on sight. `until: null` = indefinite; a dated entry (e.g.
+  # "2026-10-15") expires itself once that date passes. Empty by default — add entries as
+  # situations come up; this list is meant to be edited over time, not filled out up front.
+  company_blocklist: []
+    # Format, e.g.:
+    # - { company: "Acme Corp", until: null, reason: "already interviewing there" }
+
+  # NON-BINDING hint of the kinds of roles you're targeting — informational only, does not
+  # gate anything by itself (the actual filter is exclude_title_keywords below, plus the
+  # description-level judgment call the agent makes per job). Leave empty if you don't want
+  # to maintain this list; it's here purely as documentation for yourself and future edits.
+  titles: []
+  locations: []
+  remote_first: true            # sensible default — most searches favor remote-first roles.
+  workplace_type: remote        # remote | hybrid | onsite | any — default search workplace filter.
+  posted_within_hours: 24       # default "how fresh" a posting must be, in hours, for your queries.
+  # Auto-skip any job whose TITLE contains one of these words (case-insensitive, whole-word
+  # match). This is the ONE hard title-level filter the agent applies before it even reads a
+  # job description — use it to rule out seniority levels or role types you never want to see.
+  # Empty by default (deliberately no default seniority filter — decide what you're targeting):
+  exclude_title_keywords: []
+    # Example if you want to target only mid-level IC roles:
+    # exclude_title_keywords: [senior, sr, lead, principal, staff, head, director, vp, manager,
+    #                          intern, internship, junior, graduate]
+
+# ------------------------------------------------------------------------------
+# MAIL_LABEL — optional. Display name of the Gmail label the mail agent files
+# job-application mail under (it archives everything job-related that isn't
+# something you must act on, filing it under this label so your inbox stays
+# clean). Defaults to "Job Applications" if left unset — most users can leave
+# this out entirely.
+# ------------------------------------------------------------------------------
+mail_label: "Job Applications"

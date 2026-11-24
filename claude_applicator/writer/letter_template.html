@@ -1,0 +1,30 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<!-- letter_template.html — one-page cover-letter shell for writer/write.sh PDF output.
+     House style matched to the cv-builder template (name in #1F4E79, clean sans, A4).
+     write.sh fills {{user_full_name}} (from user.env), {{contact_line}} (from user.env
+     CONTACT_LINE — see write.sh's render_letter_pdf()), and {{BODY}} with <p>-wrapped,
+     HTML-escaped paragraphs; no date line on purpose (avoids a language-format mismatch
+     between German and English letters, and ATS forms carry their own dates). -->
+<style>
+  @page { size: A4; margin: 0; }
+  html, body { margin: 0; padding: 0; }
+  body { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; color: #1a1a1a; }
+  .page { padding: 24mm 22mm 20mm 22mm; }
+  h1 { color: #1F4E79; font-size: 15pt; font-weight: 600; margin: 0 0 1.5mm 0; letter-spacing: 0.02em; }
+  .sub { color: #555555; font-size: 9.5pt; margin: 0 0 9mm 0; }
+  .rule { border: 0; border-top: 1.2pt solid #1F4E79; margin: 0 0 9mm 0; }
+  .body p { font-size: 10.5pt; line-height: 1.55; margin: 0 0 4.2mm 0; }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>{{user_full_name}}</h1>
+  <p class="sub">{{contact_line}}</p>
+  <hr class="rule">
+  <div class="body">{{BODY}}</div>
+</div>
+</body>
+</html>

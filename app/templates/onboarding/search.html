@@ -1,0 +1,142 @@
+{% extends "onboarding/base.html" %}
+{% block step %}
+<h1>What should it apply for?</h1>
+<p class="wizard-lede">Tell it the roles you want. We'll turn them into daily LinkedIn
+searches you can edit, and your CV rides along with every application.</p>
+
+<div class="card">
+  <div class="card-head">Your CV</div>
+  {% if cv_pdfs %}
+  <p><strong>{{ cv_pdfs | length }} CV{{ 's' if cv_pdfs | length != 1 }} in place:</strong>
+  {{ cv_pdfs | join(', ') }}</p>
+  {% else %}
+  <p class="note">No CV yet — add one now (a PDF). It gets attached to applications.</p>
+  {% endif %}
+  <form method="post" action="{{ url_for('onboarding_cv_upload') }}" enctype="multipart/form-data" class="wizard-inline-form">
+    <input type="file" name="cv_pdf" accept="application/pdf,.pdf" required>
+    <button type="submit" class="btn small secondary">Upload CV</button>
+    {% if cv_banner %}<p class="note">{{ cv_banner }}</p>{% endif %}
+  </form>
+</div>
+
+<form method="post" action="{{ url_for('onboarding_step') }}" class="wizard-form">
+  <input type="hidden" name="step" value="search">
+
+  <div class="card">
+    <div class="card-head">Job searches <span class="req">*</span></div>
+    <p class="note">Quick start — type the roles you want (up to 3, one per line or
+    comma-separated) and where; we'll build the searches. Edit the results freely below.</p>
+    <div class="grid-2">
+      <div class="field"><label>Roles</label>
+        <textarea name="roles_text" rows="2" placeholder="e.g. backend engineer, data analyst">{{ roles_text }}</textarea></div>
+      <div class="field"><label>Where (country or city)</label>
+        <input type="text" name="roles_location" value="{{ roles_location }}" placeholder="e.g. Germany">
+      </div>
+    </div>
+    <button type="submit" formaction="{{ url_for('onboarding_search_generate') }}" class="btn small secondary">Build searches from these roles</button>
+
+    <hr class="section-divider">
+    <div id="searchq-container">
+      {% set nq = (l.sq_query or []) | length %}
+      {% for i in range(nq) %}
+      <div class="repeat-row">
+        <div class="grid-2">
+          <div class="field"><label>Search for</label>
+            <input type="text" name="sq_query" value="{{ l.sq_query[i] }}" required></div>
+          <div class="field"><label>Where</label>
+            <input type="text" name="sq_location" value="{{ (l.sq_location or [''])[i] }}" required></div>
+        </div>
+        <div class="grid-2">
+          <div class="field"><label>Freshness</label>
+            <select name="sq_filters">
+              {% for opt in ['past 24 hours', 'past week', 'past 24 hours + remote', 'past week + remote'] %}
+              <option value="{{ opt }}" {{ 'selected' if (l.sq_filters or [''])[i] == opt }}>{{ opt }}</option>
+              {% endfor %}
+            </select></div>
+          <div class="field"><label>CV for this search</label>
+            <select name="sq_resume">
+              <option value="">(default CV)</option>
+              {% for pdf in cv_pdfs %}
+              <option value="data/{{ pdf }}" {{ 'selected' if (l.sq_resume or [''])[i] == 'data/' ~ pdf }}>{{ pdf }}</option>
+              {% endfor %}
+            </select></div>
+        </div>
+        <button type="button" class="btn small ghost row-remove" onclick="this.closest('.repeat-row').remove()">Remove</button>
+      </div>
+      {% endfor %}
+      {% if nq == 0 %}
+      <div class="repeat-row">
+        <div class="grid-2">
+          <div class="field"><label>Search for</label>
+            <input type="text" name="sq_query" placeholder="e.g. data analyst" required></div>
+          <div class="field"><label>Where</label>
+            <input type="text" name="sq_location" placeholder="e.g. Germany" required></div>
+        </div>
+        <div class="grid-2">
+          <div class="field"><label>Freshness</label>
+            <select name="sq_filters">
+              <option value="past week">past week</option>
+              <option value="past week + remote">past week + remote</option>
+              <option value="past 24 hours">past 24 hours</option>
+              <option value="past 24 hours + remote">past 24 hours + remote</option>
+            </select></div>
+          <div class="field"><label>CV for this search</label>
+            <select name="sq_resume"><option value="">(default CV)</option>
+              {% for pdf in cv_pdfs %}<option value="data/{{ pdf }}">{{ pdf }}</option>{% endfor %}</select></div>
+        </div>
+        <button type="button" class="btn small ghost row-remove" onclick="this.closest('.repeat-row').remove()">Remove</button>
+      </div>
+      {% endif %}
+    </div>
+    <template id="searchq-template">
+      <div class="repeat-row">
+        <div class="grid-2">
+          <div class="field"><label>Search for</label>
+            <input type="text" name="sq_query" placeholder="e.g. data analyst" required></div>
+          <div class="field"><label>Where</label>
+            <input type="text" name="sq_location" placeholder="e.g. Germany" required></div>
+        </div>
+        <div class="grid-2">
+          <div class="field"><label>Freshness</label>
+            <select name="sq_filters">
+              <option value="past week">past week</option>
+              <option value="past week + remote">past week + remote</option>
+              <option value="past 24 hours">past 24 hours</option>
+              <option value="past 24 hours + remote">past 24 hours + remote</option>
+            </select></div>
+          <div class="field"><label>CV for this search</label>
+            <select name="sq_resume"><option value="">(default CV)</option>
+              {% for pdf in cv_pdfs %}<option value="data/{{ pdf }}">{{ pdf }}</option>{% endfor %}</select></div>
+        </div>
+        <button type="button" class="btn small ghost row-remove" onclick="this.closest('.repeat-row').remove()">Remove</button>
+      </div>
+    </template>
+    <button type="button" class="btn small secondary" onclick="addRow('searchq')">+ Add search</button>
+  </div>
+
+  <div class="card">
+    <div class="card-head">Optional: a throwaway password for company sites</div>
+    <p class="note">Some company application pages make you create an account. If you
+    want the engine to do that for you, give it a password you don't use anywhere else.
+    Leave everything empty and it will skip those sign-ups.</p>
+    <div class="grid-2">
+      <div class="field"><label>Username (usually your email)</label>
+        <input type="text" name="acc_username" value="{{ f.acc_username }}" placeholder="Leave empty to skip account creation"></div>
+      <div class="field"><label>Throwaway password</label>
+        <input type="text" name="acc_password" value="{{ f.acc_password }}" placeholder="A password used nowhere else"></div>
+    </div>
+  </div>
+
+  <div class="wizard-nav">
+    <button type="submit" class="btn primary">Continue →</button>
+  </div>
+</form>
+
+<script>
+function addRow(id) {
+  var tpl = document.getElementById(id + '-template');
+  var box = document.getElementById(id + '-container');
+  box.appendChild(tpl.content.cloneNode(true));
+}
+</script>
+{% endblock %}

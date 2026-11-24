@@ -1,0 +1,62 @@
+{% extends "onboarding/base.html" %}
+{% block step %}
+<h1>Almost there</h1>
+<p class="wizard-lede">Pick when the daily run happens, then we'll write everything and
+you can watch a safe test.</p>
+
+{% if not finished %}
+<form method="post" action="{{ url_for('onboarding_finish') }}" class="wizard-form">
+  <div class="card">
+    <div class="card-head">Daily run time</div>
+    <div class="grid-2">
+      <div class="field"><label>Run at</label>
+        <input type="time" name="run_time" value="{{ run_time }}" required>
+      </div>
+      <div class="field"><label>Mode</label>
+        <input type="text" value="prepare — walk to the Submit button, you press it" disabled>
+      </div>
+    </div>
+    <p class="note">Your Mac needs to be on (plugged in is best) at that time. You can
+    switch to fully automatic <em>live</em> mode later on the Schedule page, once you
+    trust it.</p>
+  </div>
+  <div class="wizard-nav">
+    <button type="submit" class="btn primary">Finish setup →</button>
+  </div>
+</form>
+
+{% else %}
+<div class="card">
+  <div class="card-head">Everything's written</div>
+  <pre class="wizard-log">{{ assemble_log }}</pre>
+  {% for item in readiness %}
+  <div class="checklist">
+    <span class="status-badge {{ 'ok' if item.ok else 'bad' }}">{{ '✓' if item.ok else '—' }}</span>
+    <div>{{ item.label }}{% if not item.ok %} <span class="muted">(finish later on the {{ item.page }} page)</span>{% endif %}</div>
+  </div>
+  {% endfor %}
+</div>
+
+{% if schedule_log %}
+<div class="card">
+  <div class="card-head">Daily schedule</div>
+  <pre class="wizard-log">{{ schedule_log }}</pre>
+</div>
+{% endif %}
+
+<div class="card wizard-celebrate">
+  <h2>Ready for a test run 🎉</h2>
+  <p>This finds one matching job, fills one application, and stops at the Submit button.
+  You'll see it work, live.</p>
+  <form method="post" action="/run/test">
+    <button type="submit" class="btn primary">Run the test now</button>
+  </form>
+  <p class="note">The Home page shows the live log while it runs. Or come back to it any
+  time — everything is saved.</p>
+  <div class="actions-row">
+    <a class="btn secondary" href="{{ url_for('home') }}">Open the app</a>
+    <a class="btn secondary" href="{{ url_for('dashboard_page') }}">See the dashboard</a>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

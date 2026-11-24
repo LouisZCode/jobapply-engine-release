@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<!--
+  CV template — house style. Copy to data/drafts/<Name>_<ROLE>_2026.html and fill
+  the {{PLACEHOLDER}} / <!-- FILL --> zones from the user's answer bank. DO NOT edit the CSS — it *is* the style.
+  Rules: contact from profile.yaml (identity.email_external + location), no prose bolding
+  (bold only titles/names/labels), accent #1F4E79.
+  Render: bash .claude/skills/cv-builder/render.sh <this-file>.html
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{{FULL_NAME}} — {{ROLE_TITLE}}</title>
+<style>
+  @page { size: A4; margin: 13mm 15mm; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: 10pt; line-height: 1.33; color: #1c1c1c;
+    -webkit-font-smoothing: antialiased;
+  }
+  .name  { font-size: 21pt; font-weight: 700; letter-spacing: 0.05em; color: #1F4E79; margin: 0; }
+  .title { font-size: 11pt; font-weight: 600; color: #1F4E79; margin: 2pt 0 0 0; letter-spacing: 0.01em; }
+  .contact { font-size: 8.7pt; color: #555; margin: 4pt 0 0 0; }
+  h2 {
+    font-size: 9.5pt; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
+    color: #1F4E79; border-bottom: 0.8pt solid #BFBFBF; padding-bottom: 2.5pt; margin: 12pt 0 5pt 0;
+  }
+  p { margin: 0; }
+  .lead { margin: 0; text-align: justify; }
+  .entry { margin: 6pt 0 0 0; }
+  .entry:first-of-type { margin-top: 2pt; }
+  .headrow { display: flex; justify-content: space-between; align-items: baseline; gap: 10pt; }
+  .lhs { font-weight: 400; }
+  .lhs b { font-weight: 700; color: #1F4E79; }
+  .rhs { color: #595959; white-space: nowrap; font-size: 9.2pt; }
+  .sectionlead { font-style: italic; color: #595959; margin: 0 0 2pt 0; }
+  ul { margin: 2.5pt 0 0 0; padding-left: 13pt; }
+  li { margin: 1.8pt 0; }
+  .proj { margin: 5pt 0 0 0; }
+  .proj .p-title b { font-weight: 700; color: #1F4E79; }
+  .proj .p-title .p-sub { color: #555; font-weight: 400; }
+  .stack p { margin: 2.5pt 0 0 0; }
+  .stack .lbl { font-weight: 700; color: #1F4E79; }
+  a { color: inherit; text-decoration: none; }
+</style>
+</head>
+<body>
+
+  <div class="name">{{FULL_NAME_CAPS}}</div>
+  <div class="title">{{ROLE_TITLE}} &middot; {{ROLE_SUBTITLE}}</div>
+  <div class="contact">
+    {{contact_line}}
+  </div>
+
+  <h2>Profile</h2>
+  <p class="lead">{{PROFILE — 3–5 lines re-angled for the role, from answer_bank.md. No bold words.}}</p>
+
+  <h2>Selected Projects</h2>
+  <!-- The 3 products, verbatim facts, re-emphasized per role. Repeat this block x3. -->
+  <div class="proj">
+    <p class="p-title"><b>{{Project name}}</b> <span class="p-sub">&middot; {{one-line descriptor}} &middot; {{domain}}</span></p>
+    <ul>
+      <li>{{bullet}}</li>
+      <li>{{bullet}}</li>
+    </ul>
+  </div>
+
+  <h2>{{EXPERIENCE SECTION NAME per role — e.g. Forward-Deployed &amp; Customer Experience}}</h2>
+  <p class="sectionlead">{{optional italic one-line framing of the section}}</p>
+  <!-- The 4 employers, verbatim facts, re-framed per role. Repeat this block x4. -->
+  <div class="entry">
+    <div class="headrow">
+      <span class="lhs"><b>{{Company}}</b> &middot; {{role}}</span>
+      <span class="rhs">{{location}} &middot; {{dates}}</span>
+    </div>
+    <ul>
+      <li>{{bullet}}</li>
+    </ul>
+  </div>
+
+  <h2>Stack</h2>
+  <div class="stack">
+    <p><span class="lbl">Languages &amp; frameworks:</span> {{...}}</p>
+    <p><span class="lbl">LLM &amp; AI:</span> {{...}}</p>
+    <p><span class="lbl">Data &amp; infra:</span> {{...}}</p>
+  </div>
+
+  <h2>Education &amp; Certifications</h2>
+  <ul>
+    <!-- The 3–4 education / certification entries, verbatim facts from answer_bank.md. Repeat this block per entry. -->
+    <li><b>{{Degree or certification}}</b> &middot; {{School}}, {{City}}. {{start}} &ndash; {{end}}. {{one highlight sentence, verbatim from answer_bank.md}}</li>
+    <li><b>{{Degree}}</b> &middot; {{School}}, {{City}}. {{start}} &ndash; {{end}}.</li>
+    <li><b>{{Degree}}</b> &middot; {{School}}, {{City}}, {{Country}}. {{start}} &ndash; {{end}}.</li>
+    <li><b>{{Issuer}}</b> &middot; {{Course}} ({{Month year}}); {{Course}} ({{Month year}}).</li>
+  </ul>
+
+  <h2>Languages</h2>
+  <p>{{Language (level)}} &nbsp;&middot;&nbsp; {{Language (level)}} &nbsp;&middot;&nbsp; {{Language (level)}}</p>
+
+</body>
+</html>

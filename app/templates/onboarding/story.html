@@ -1,0 +1,35 @@
+{% extends "onboarding/base.html" %}
+{% block step %}
+<h1>Your story</h1>
+<p class="wizard-lede">When a form asks "why do you want to work here?" or wants a cover
+letter, the engine's writer answers from <strong>this file only</strong> — it never
+invents a fact. Paste your background: employers, titles, dates, real numbers, tools,
+projects. Rough notes are fine; you can deepen this any time.</p>
+
+<div class="card">
+  <div class="card-head">Pull text from a CV (optional shortcut)</div>
+  <form method="post" action="{{ url_for('onboarding_story_from_cv') }}" class="wizard-inline-form">
+    <select name="cv_filename">
+      {% for pdf in cv_pdfs %}<option value="{{ pdf }}">{{ pdf }}</option>{% endfor %}
+    </select>
+    <button type="submit" class="btn small secondary" {{ 'disabled' if not cv_pdfs }}>Add CV text below</button>
+  </form>
+  <p class="note">Adds the extracted text to the box — always read it through; PDF
+  extraction is imperfect.</p>
+</div>
+
+<form method="post" action="{{ url_for('onboarding_step') }}" class="wizard-form">
+  <input type="hidden" name="step" value="story">
+  <div class="card">
+    <div class="field">
+      <label>Background notes (a few paragraphs; more is better)</label>
+      <textarea name="background" rows="14" placeholder="e.g.&#10;Beispiel GmbH (2022–now) — Senior Backend Engineer. Built the billing reconciliation service; cut the monthly run from 6h to 40min. Python, PostgreSQL.&#10;Before that: Muster &amp; Co (2019–2022) — owned the payments REST API…">{{ background }}</textarea>
+    </div>
+    <p class="note">Skip is fine — but the writer will turn away custom questions it
+    can't answer from an empty file.</p>
+  </div>
+  <div class="wizard-nav">
+    <button type="submit" class="btn primary">Continue →</button>
+  </div>
+</form>
+{% endblock %}

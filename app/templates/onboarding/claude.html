@@ -1,0 +1,43 @@
+{% extends "onboarding/base.html" %}
+{% block step %}
+<h1>Intelligence</h1>
+<p class="wizard-lede">The engine's brain — an AI that reads postings and fills forms. Easiest path: an
+<strong>API key</strong> (e.g. <strong>Zai</strong>) added on the Connections page. Or
+connect a <strong>Claude CLI login</strong> below — the same account as the Claude app;
+daily runs typically use a few dollars' worth of usage.</p>
+
+<div class="card">
+  <div class="checklist">
+    <span class="status-badge {{ 'ok' if claude_ok else 'bad' }}">{{ 'Connected' if claude_ok else 'Not connected yet' }}</span>
+    <div>
+      {% if claude_ok %}
+        <strong>The AI CLI is ready.</strong>
+      {% else %}
+        <strong>Two steps:</strong>
+        {% if not claude_cli %}
+        <p class="note" style="margin:6px 0;">1 · Install the AI CLI (Claude Code) from
+        <a href="https://claude.ai/download" target="_blank" rel="noopener">claude.ai/download</a>.</p>
+        {% endif %}
+        <p class="note" style="margin:6px 0;">2 · {% if claude_cli %}First, {% endif %}sign in once:</p>
+        <form method="post" action="{{ url_for('onboarding_claude_terminal') }}" style="margin:4px 0 8px;">
+          <button type="submit" class="btn small secondary">Open a Terminal to sign in</button>
+        </form>
+        <form method="post" action="{{ url_for('onboarding_claude_probe') }}">
+          <button type="submit" class="btn small secondary">I've signed in — check now</button>
+        </form>
+      {% endif %}
+      {% if probe_message %}
+      <p class="note" style="margin:8px 0 0;"><code>{{ probe_message[:200] }}</code><br>
+      <span class="muted">checked {{ probe_at }}</span></p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<form method="post" action="{{ url_for('onboarding_step') }}" class="wizard-nav">
+  <input type="hidden" name="step" value="claude">
+  <button type="submit" class="btn primary">{{ 'Continue →' if claude_ok else 'Skip for now →' }}</button>
+</form>
+<p class="note">Skipped is fine during setup — but the daily run won't work until an AI
+is connected. You can finish this later on the Connections page.</p>
+{% endblock %}

@@ -1,0 +1,59 @@
+{% extends "onboarding/base.html" %}
+{% block step %}
+<h1>About you</h1>
+<p class="wizard-lede">The details every application form asks for. Nothing here leaves
+this Mac.</p>
+
+<form method="post" action="{{ url_for('onboarding_step') }}" class="wizard-form">
+  <input type="hidden" name="step" value="identity">
+  <div class="card">
+    <div class="card-head">Contact</div>
+    <div class="grid-2">
+      <div class="field"><label>Full name <span class="req">*</span></label>
+        <input type="text" name="full_name" value="{{ f.full_name }}" placeholder="e.g. Maria Musterfrau" required></div>
+      <div class="field"><label>Phone <span class="req">*</span></label>
+        <input type="tel" name="phone" value="{{ f.phone }}" placeholder="e.g. +49 30 1234567" required></div>
+    </div>
+    <div class="field"><label>Email <span class="req">*</span> — the address on your LinkedIn account</label>
+      <input type="email" name="email" value="{{ f.email }}" placeholder="you@example.com" required></div>
+    <div class="field"><label>Second email for company sites (optional)</label>
+      <input type="email" name="email_external" value="{{ f.email_external }}" placeholder="Leave empty to use the same address everywhere">
+      <p class="note">Company application pages and verification mails can go to a second
+      address if you like. Same address everywhere is perfectly fine.</p></div>
+    <div class="grid-3">
+      <div class="field"><label>LinkedIn profile (optional)</label>
+        <input type="url" name="linkedin" value="{{ f.linkedin }}" placeholder="linkedin.com/in/you"></div>
+      <div class="field"><label>Portfolio site (optional)</label>
+        <input type="url" name="portfolio" value="{{ f.portfolio }}" placeholder="yoursite.com"></div>
+      <div class="field"><label>GitHub (optional)</label>
+        <input type="url" name="github" value="{{ f.github }}" placeholder="github.com/you"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">Where you are</div>
+    <div class="grid-2">
+      <div class="field"><label>City <span class="req">*</span></label>
+        <input type="text" name="current_city" value="{{ f.current_city }}" placeholder="e.g. Berlin" required></div>
+      <div class="field"><label>Country <span class="req">*</span></label>
+        <input type="text" name="country" value="{{ f.country }}" placeholder="e.g. Germany" required></div>
+    </div>
+    <div class="grid-2">
+      <div class="field"><label>Relocating? (optional)</label>
+        <input type="text" name="relocating_to" value="{{ f.relocating_to }}" placeholder="Moving to… e.g. Lisbon"></div>
+      <div class="field"><label>Roughly when</label>
+        <input type="text" name="relocation_date" value="{{ f.relocation_date }}" placeholder="e.g. 2027-01"></div>
+    </div>
+    <div class="field"><label>Where would you like to work?</label>
+      <select name="remote_preference">
+        {% for v, lbl in [('remote','Remote — from anywhere'),('hybrid','Hybrid — some days in an office'),('onsite','Onsite — at the office'),('flexible','Flexible / any of these') ] %}
+        <option value="{{ v }}" {{ 'selected' if f.remote_preference == v }}>{{ lbl }}</option>
+        {% endfor %}
+      </select></div>
+  </div>
+
+  <div class="wizard-nav">
+    <button type="submit" class="btn primary">Continue →</button>
+  </div>
+</form>
+{% endblock %}

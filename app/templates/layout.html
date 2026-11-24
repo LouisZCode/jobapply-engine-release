@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Job Apply{% endblock %}</title>
+<link rel="stylesheet" href="{{ url_for('static', path='style.css') }}?v={{ static_version }}">
+<script>
+// Apply the stored theme before first paint (no flash). Light is the default.
+(function () {
+  try {
+    if (localStorage.getItem('ja-theme') === 'dark') {
+      document.documentElement.setAttribute('data-theme', 'dark');
+    }
+  } catch (e) {}
+})();
+</script>
+</head>
+<body>
+<div class="shell">
+  <nav class="sidenav">
+    <div class="brand"><span class="brand-mark">JA</span>Job Apply</div>
+    <ul>
+      <li>
+        <a href="{{ url_for('home') }}" class="{{ 'active' if active == 'home' else '' }}">
+          <span class="dot {{ 'on' if steps_done == steps_total else 'off' }}"></span>
+          Home
+        </a>
+      </li>
+      <li>
+        <a href="{{ url_for('profile_page') }}" class="{{ 'active' if active == 'profile' else '' }}">
+          <span class="dot {{ 'on' if status.profile_saved and status.rendered else 'off' }}"></span>
+          Profile
+        </a>
+      </li>
+      <li>
+        <a href="{{ url_for('documents_page') }}" class="{{ 'active' if active == 'documents' else '' }}">
+          <span class="dot {{ 'on' if status.answer_bank_created and status.cv_in_place else 'off' }}"></span>
+          Background
+        </a>
+      </li>
+      <li>
+        <a href="{{ url_for('connections') }}" class="{{ 'active' if active == 'connections' else '' }}">
+          <span class="dot {{ 'on' if status.linkedin_confirmed and status.claude_connected else 'off' }}"></span>
+          Connections
+        </a>
+      </li>
+      <li>
+        <a href="{{ url_for('feedback_page') }}" class="{{ 'active' if active == 'feedback' else '' }}">
+          <span class="dot off"></span>
+          Feedback
+        </a>
+      </li>
+    </ul>
+    <ul class="sidenav-secondary">
+      <li>
+        <a href="{{ url_for('schedule_page') }}" class="{{ 'active' if active == 'schedule' else '' }}">Schedule</a>
+      </li>
+      <li>
+        <a href="{{ url_for('dashboard_page') }}" class="{{ 'active' if active == 'dashboard' else '' }}">Dashboard</a>
+      </li>
+    </ul>
+    <div class="theme-switch">
+      <label class="switch" title="Light / dark">
+        <input type="checkbox" id="theme-toggle" aria-label="Dark mode">
+        <span class="slider"></span>
+      </label>
+      <span id="theme-label">Dark mode</span>
+    </div>
+  </nav>
+  <main class="content">
+    {% if stop_banner %}
+      <div class="banner {{ 'ok' if stop_banner.ok else 'warn' }}">{{ stop_banner.message }}</div>
+    {% endif %}
+    {% block content %}{% endblock %}
+  </main>
+</div>
+<script>
+// Light / dark switch — persisted per browser, applied before paint by the <head> script.
+(function () {
+  var box = document.getElementById('theme-toggle');
+  if (!box) { return; }
+  box.checked = document.documentElement.getAttribute('data-theme') === 'dark';
+  box.addEventListener('change', function () {
+    if (box.checked) {
+      document.documentElement.setAttribute('data-theme', 'dark');
+    } else {
+      document.documentElement.removeAttribute('data-theme');
+    }
+    try { localStorage.setItem('ja-theme', box.checked ? 'dark' : 'light'); } catch (e) {}
+  });
+})();
+
+// Tiny shared helpers — no framework, no build step.
+function copyText(btn, text) {
+  navigator.clipboard.writeText(text).then(function () {
+    var old = btn.textContent;
+    btn.textContent = "Copied";
+    setTimeout(function () { btn.textContent = old; }, 1200);
+  });
+}
+
+// The one background-job poller, for the shared panel in _job_panel.html. While the
+// job runs it updates the label, elapsed time, progress bar and the small details log
+// every 2s; the moment it ends it does a single plain GET reload (location.replace of the
+// current path) so the page renders its finished state. Never location.reload() — that
+// re-submitted the POST this page came from and restarted the job (2026-08-19).
+(function () {
+  var panel = document.getElementById('job-panel');
+  if (!panel) { return; }
+  var names = (panel.getAttribute('data-names') || '').split(',').filter(Boolean);
+  var label = document.getElementById('job-label');
+  var meta = document.getElementById('job-meta');
+  var bar = document.getElementById('job-bar');
+  var log = document.getElementById('job-log');
+  var err = document.getElementById('job-error');
+  var stopForm = document.getElementById('job-stop-form');
+
+  function finishReload() {
+    setTimeout(function () { window.location.replace(window.location.pathname + window.location.hash); }, 900);
+  }
+
+  function poll() {
+    fetch('/jobs/status').then(function (r) { return r.json(); }).then(function (d) {
+      if (names.indexOf(d.name) === -1) { return; }
+      panel.style.display = '';
+      label.textContent = d.label || d.name || '';
+      if (d.running) {
+        meta.textContent = Math.floor(d.elapsed) + 's';
+        bar.style.width = d.progress + '%';
+        log.textContent = d.log_tail || '';
+        if (log.parentElement.open) { log.scrollTop = log.scrollHeight; }
+        setTimeout(poll, 2000);
+        return;
+      }
+      if (stopForm) { stopForm.style.display = 'none'; }
+      bar.style.width = '100%';
+      panel.classList.add(d.ok ? 'done' : 'failed');
+      if (d.error) { err.textContent = d.error; err.style.display = ''; }
+      finishReload();
+    }).catch(function () { setTimeout(poll, 4000); /* server may be restarting */ });
+  }
+
+  if (panel.getAttribute('data-running') === 'true') {
+    poll();
+  }
+})();
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

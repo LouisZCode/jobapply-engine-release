@@ -1,0 +1,94 @@
+{% extends "layout.html" %}
+{% block title %}Dashboard — Job Apply{% endblock %}
+{% block content %}
+<h1>Dashboard</h1>
+
+<h2 style="margin-top:0;">AI usage</h2>
+<div class="grid-3">
+  <div class="card">
+    <p class="stat">{{ fmt_tokens(usage.today.total) }}</p>
+    <p class="stat-sub">tokens today · {{ usage.today.runs }} run{{ '' if usage.today.runs == 1 else 's' }}</p>
+  </div>
+  <div class="card">
+    <p class="stat">{{ fmt_tokens(usage.all.total) }}</p>
+    <p class="stat-sub">tokens all time · {{ usage.all.runs }} run{{ '' if usage.all.runs == 1 else 's' }}</p>
+  </div>
+  <div class="card">
+    <p class="stat">${{ '%.2f' % usage.all.cost_usd }}</p>
+    <p class="stat-sub">API-equivalent, all time<span class="info" tabindex="0">ⓘ<span class="tip">Your runs are covered by your AI subscription — this is what the same tokens would cost on the API, a comparison number, not a bill.</span></span></p>
+  </div>
+</div>
+{% if usage.all.runs %}
+  <p class="note" style="margin:-6px 0 18px;">
+    All time: {{ fmt_tokens(usage.all.input) }} in · {{ fmt_tokens(usage.all.output) }} out ·
+    {{ fmt_tokens(usage.all.cache_read) }} cache read · {{ fmt_tokens(usage.all.cache_create) }} cache written.
+    Counted from every run's own record — tool calls, sub-agents, the daily applies, the mail agent, and the jobs started from this app.
+    {% if usage.last %}Last run: {{ usage.last.name }} ({{ fmt_tokens(usage.last.input + usage.last.output + usage.last.cache_read + usage.last.cache_create) }} tokens).{% endif %}
+  </p>
+{% else %}
+  <p class="note" style="margin:-6px 0 18px;">No AI runs recorded on this Mac yet.</p>
+{% endif %}
+
+<h2>Applications</h2>
+{% if not db_exists %}
+  <div class="card">
+    <p style="margin:0;">No applications database yet — it's created the first time the app starts.</p>
+  </div>
+{% else %}
+  {% if db_error %}
+    <div class="banner bad">Could not read the applications database: {{ db_error }}</div>
+  {% endif %}
+
+  <div class="grid-3">
+    <div class="card">
+      <p class="stat">{{ stats.total }}</p>
+      <p class="stat-sub">total applications</p>
+    </div>
+    <div class="card">
+      <p class="stat">{{ stats.this_week }}</p>
+      <p class="stat-sub">this week</p>
+    </div>
+    <div class="card">
+      <p class="stat">{{ stats.companies }}</p>
+      <p class="stat-sub">distinct companies</p>
+    </div>
+  </div>
+
+  {% if costs_total is not none %}
+    <p class="note" style="margin:-6px 0 18px;">Engine cost ledger (output/costs.csv): ${{ '%.2f' % costs_total }} API-equivalent across the daily rounds.</p>
+  {% endif %}
+
+  {% if rows %}
+    <div class="card" style="overflow-x:auto; padding:0;">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Company</th>
+            <th>Title</th>
+            <th>Status</th>
+            <th>Outcome</th>
+            <th>Channel</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+            <tr>
+              <td>{{ row.applied_at or row.status_updated_at }}</td>
+              <td>{{ row.company or '' }}</td>
+              <td>{{ row.title or '' }}</td>
+              <td>{{ row.status or '' }}</td>
+              <td>{{ row.outcome or '' }}</td>
+              <td>{{ row.apply_email or '' }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="card">
+      <p class="note" style="margin:0;">No applications yet.</p>
+    </div>
+  {% endif %}
+{% endif %}
+{% endblock %}

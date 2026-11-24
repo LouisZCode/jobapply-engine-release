@@ -1,0 +1,95 @@
+{% extends "onboarding/base.html" %}
+{% block step %}
+<h1>Right to work &amp; money</h1>
+<p class="wizard-lede">Forms always ask these. The engine answers <em>only</em> from this
+page — it would rather skip a question than guess.</p>
+
+<form method="post" action="{{ url_for('onboarding_step') }}" class="wizard-form">
+  <input type="hidden" name="step" value="work">
+
+  <div class="card">
+    <div class="card-head">Work permission</div>
+    <div class="grid-2">
+      <div class="field"><label>Nationality (as on your passport) <span class="req">*</span></label>
+        <input type="text" name="nationality" value="{{ f.nationality }}" placeholder="e.g. Spanish" required></div>
+      <div class="field"><label>Legally allowed to work in</label>
+        <input type="text" name="authorized_in" value="{{ f.authorized_in }}" placeholder="Countries, comma-separated — e.g. Germany, Spain">
+        <p class="note">Leave empty if you're not sure; you can fill it in later.</p></div>
+    </div>
+    <div class="grid-2">
+      <div class="field"><label>Do you need visa sponsorship?</label>
+        <select name="visa_sponsorship_required">
+          {% for v, lbl in [('', 'Not answered'), ('yes', 'Yes — I need sponsorship'), ('no', 'No — I have work authorization')] %}
+          <option value="{{ v }}" {{ 'selected' if f.visa_sponsorship_required == v }}>{{ lbl }}</option>
+          {% endfor %}
+        </select></div>
+      <div class="field"><label>Work permit type (if any)</label>
+        <input type="text" name="work_permit_type" value="{{ f.work_permit_type }}" placeholder="e.g. EU Blue Card"></div>
+    </div>
+    <div class="checkbox-row">
+      <label><input type="checkbox" name="citizenship_gate_pick_citizen" {{ 'checked' if f.citizenship_gate_pick_citizen }}>
+      When a form's nationality question is really a work-permission gate ("Are you an EU citizen?"),
+      answer it with the option that matches my <em>right to work</em>, not my passport.</label>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">Languages</div>
+    <div id="langs-container">
+      {% set lang_list = l.lang_language or [] %}
+      {% for i in range(lang_list | length) %}
+      <div class="repeat-row grid-2">
+        <input type="text" name="lang_language" value="{{ l.lang_language[i] }}" placeholder="e.g. German">
+        <input type="text" name="lang_level" value="{{ (l.lang_level or [''])[i] }}" placeholder="e.g. native / fluent / B2">
+      </div>
+      {% endfor %}
+    </div>
+    <template id="langs-template">
+      <div class="repeat-row grid-2">
+        <input type="text" name="lang_language" placeholder="e.g. English">
+        <input type="text" name="lang_level" placeholder="e.g. fluent">
+      </div>
+    </template>
+    <button type="button" class="btn small secondary" onclick="addRow('langs')">+ Add language</button>
+  </div>
+
+  <div class="card">
+    <div class="card-head">Salary — your private floor</div>
+    <div class="grid-3">
+      <div class="field"><label>Currency <span class="req">*</span></label>
+        <input type="text" name="currency" value="{{ f.currency or 'EUR' }}" placeholder="EUR" required></div>
+      <div class="field"><label>My minimum (secret floor) <span class="req">*</span></label>
+        <input type="number" name="comp_floor" value="{{ f.comp_floor }}" placeholder="e.g. 60000" required></div>
+      <div class="field"><label>Number to type when a form insists on one</label>
+        <input type="number" name="comp_forced_single_number" value="{{ f.comp_forced_single_number }}" placeholder="e.g. 70000" required></div>
+    </div>
+    <p class="note">Your floor is <strong>never typed into any form</strong> — the engine
+    only uses it to walk away from offers below it. The second number is what a form sees
+    when it demands a single salary figure. Nobody sees the floor but you.</p>
+  </div>
+
+  <div class="card">
+    <div class="card-head">Availability</div>
+    <div class="grid-3">
+      <div class="field"><label>Years of work experience</label>
+        <input type="number" name="screening_total_years_experience" value="{{ f.screening_total_years_experience }}" placeholder="e.g. 5"></div>
+      <div class="field"><label>Notice period</label>
+        <input type="text" name="screening_notice_period" value="{{ f.screening_notice_period }}" placeholder="e.g. 4 weeks"></div>
+      <div class="field"><label>Earliest start date</label>
+        <input type="text" name="screening_earliest_start_date" value="{{ f.screening_earliest_start_date }}" placeholder="e.g. 2027-01"></div>
+    </div>
+  </div>
+
+  <div class="wizard-nav">
+    <button type="submit" class="btn primary">Continue →</button>
+  </div>
+</form>
+
+<script>
+function addRow(id) {
+  var tpl = document.getElementById(id + '-template');
+  var box = document.getElementById(id + '-container');
+  box.appendChild(tpl.content.cloneNode(true));
+}
+</script>
+{% endblock %}

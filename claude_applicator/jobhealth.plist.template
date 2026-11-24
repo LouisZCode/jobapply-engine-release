@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Template — setup renders this to a real ~/Library/LaunchAgents/<label_prefix>.jobhealth.plist,
+     substituting {{label_prefix}} (a reverse-DNS-style namespace unique to the install, e.g.
+     com.<username>) and {{install_path}} (this repo's absolute path on the target machine). -->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>{{label_prefix}}.jobhealth</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>{{install_path}}/claude_applicator/check_health.sh</string>
+  </array>
+
+  <!-- Daily at 09:00 local — RB-1 health heartbeat check: verifies the scheduled apply
+       run and the nightly mail sweep both completed OK (output/health_status.json,
+       written by health_update.py), alerting via a macOS notification + one status
+       line in output/health_check.log on any miss (Mac asleep, hang, nonzero rc).
+       Deterministic, seconds of work: no Chrome, no caffeinate, no pre-wake pmset.
+       NOT installed by this repo change — setup copies the rendered plist to
+       ~/Library/LaunchAgents and runs `launchctl load` when ready. -->
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key><integer>9</integer>
+    <key>Minute</key><integer>0</integer>
+  </dict>
+  <key>RunAtLoad</key>
+  <false/>
+
+  <key>StandardOutPath</key>
+  <string>{{install_path}}/claude_applicator/output/launchd_health.log</string>
+  <key>StandardErrorPath</key>
+  <string>{{install_path}}/claude_applicator/output/launchd_health.log</string>
+</dict>
+</plist>

@@ -1,0 +1,22 @@
+{% extends "layout.html" %}
+{% block title %}Feedback — Job Apply{% endblock %}
+{% block content %}
+<h1>Feedback</h1>
+
+<div class="card">
+  <span class="wip">Working on this</span>
+  <p style="margin:0 0 10px;">This page will grow as the app learns about your search. Planned, in order:</p>
+  <ul style="margin:0 0 14px 18px; padding:0;">
+    <li><strong>Salary research</strong> — what roles like yours pay where you're searching, so the numbers on your Profile are grounded, not guessed.</li>
+    <li><strong>Search suggestions</strong> — the LinkedIn searches worth adding for your target role, from what you told us on the Profile page.</li>
+    <li><strong>What the applications say</strong> — after a week or two of runs: which searches produce replies, which don't, and what to change.</li>
+  </ul>
+  {% if target_queries %}
+    <p class="note" style="margin:0;">It will work from your current searches:
+      {% for q in target_queries %}<code class="inline">{{ q.query }}{% if q.location %} · {{ q.location }}{% endif %}</code>{{ ' ' }}{% endfor %}
+    </p>
+  {% else %}
+    <p class="note" style="margin:0;">Add at least one job search on the <a href="{{ url_for('profile_page') }}">Profile</a> page and this page will have something to work from.</p>
+  {% endif %}
+</div>
+{% endblock %}

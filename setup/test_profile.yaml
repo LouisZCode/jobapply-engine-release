@@ -1,0 +1,173 @@
+# setup/test_profile.yaml — fully-filled FICTIONAL profile for testing
+# setup/render_templates.py AND for showing what a completed
+# claude_applicator/profile.template.yaml looks like once filled in.
+#
+# Persona: Maria Musterfrau — not a real person. Every value below (name,
+# employer, projects, numbers, addresses) is invented for illustration.
+# See claude_applicator/profile.template.yaml for the blank template with
+# full field-by-field documentation; this file mirrors its exact structure.
+
+identity:
+  full_name: Maria Musterfrau
+  # EMAIL IS PATH-DEPENDENT (see profile.template.yaml comments):
+  #   - Easy Apply / any linkedin.com form  -> `email`
+  #   - External ATS (any non-linkedin host) -> `email_external`
+  email: maria.musterfrau@example.com            # Easy Apply / LinkedIn-native forms ONLY.
+  email_external: maria.musterfrau.ext@example.com   # External ATS form fields + account sign-ups.
+  phone: "+49 30 1234567"
+  portfolio: https://maria-musterfrau.example.com
+  github: https://github.com/example-mmusterfrau
+  linkedin: https://www.linkedin.com/in/example-maria-musterfrau
+
+account_credentials:
+  username: mmusterfrau      # only used if a site demands a username distinct from the email
+  password: "ExampleThrowaway123!"   # throwaway password for ATS sign-ups (not reused from any important account)
+
+do_not_use:
+  phones: ["+49 30 7654321"]   # an old number that might still be on a stale CV somewhere
+  emails: []
+
+location:
+  current_city: Musterstadt
+  street_address: "Musterstraße 12"
+  postal_code: "10115"
+  country: Germany
+  relocating_to: null                  # not currently relocating
+  relocation_date: null
+  remote_preference: "remote-first (strongly preferred)"
+  travel: "occasional travel / offsites OK"
+  note: "Germany-based regardless of remote/onsite."
+  must_be_based_in: "Germany"
+  onsite_hybrid_cities: ["Musterstadt"]
+  willing_to_relocate: false
+
+work_authorization:
+  authorized_in: ["Germany"]
+  visa_sponsorship_required: false
+  nationality: Ruritanian                # example DATA field — a country-list Nationality dropdown answer
+  eu_citizen: false
+  right_to_work_eu: true
+  work_permit_type: "Permanent residence"
+  work_permit_note: >
+    Permanent (unbefristet) residence and work permit for Germany: unlimited duration, no
+    employer, hours, or duration restrictions, and no visa sponsorship needed now or ever.
+  citizenship_gate_pick_citizen: true
+  # Example policy note: Maria holds unrestricted EU work rights via a permanent residence
+  # permit but is not an EU citizen herself, so gate-style "citizen/other" screening questions
+  # are treated as a work-permission proxy (citizenship_gate_pick_citizen: true), while any
+  # DATA field (Nationality dropdown, passport field) always states the truthful nationality.
+
+compensation:
+  currency: EUR
+  floor: 55000                         # SECRET — never entered on any form
+  target: 65000
+  range_low: 65000
+  range_high: 72000
+  forced_single_number: 65000          # what actually gets typed when a field forces ONE number
+  range_or_text_field: "65,000-72,000"   # what gets typed when free text / a range is allowed
+  strategy_note: >
+    Prefer to ask their band first in live conversation. In any written field, never
+    reveal the floor. Single number -> 65000. Range/text -> 65,000-72,000. State the
+    number, then stop: no softening, no volunteering flexibility.
+
+languages:
+  - { language: German,  level: native }
+  - { language: English, level: C1 }
+  - { language: French,  level: B2 }
+
+education:
+  - { degree: "MSc Data Science", school: "Musterstadt Technical University", years: "2018-2020" }
+  - { degree: "BSc Business Informatics", school: "University of Musterland", years: "2014-2018" }
+
+certifications:
+  - "Example Cloud Practitioner Certification, Example Cloud Provider (2025)"
+  - "Example Data Analytics Professional Certificate"
+
+experience:
+  most_recent:
+    company: "Beispiel Software GmbH"
+    title: "Data Analyst"
+    industry: "B2B SaaS"
+    mode: remote
+    start: "2022"
+    end: "present"
+    highlight: >
+      Built an internal reporting dashboard, used daily by the sales team, that cut
+      weekly report prep time from two days to two hours.
+  prior_companies: ["Muster Consulting AG", "Beispiel Retail GmbH"]
+  summary: "5+ years of data analytics and reporting experience across B2B SaaS and retail."
+
+portfolio_projects:
+  - name: "Muster Insights"
+    desc: >
+      Self-serve analytics dashboard for small e-commerce shops. Python, Postgres,
+      Streamlit, deployed on a small cloud VM. Side project, a handful of active users.
+  - name: "Beispiel Budget Tracker"
+    desc: "Personal-finance tracking app with automated categorization. Built to learn FastAPI."
+
+technical_stack:
+  - Python
+  - SQL
+  - PostgreSQL
+  - Pandas
+  - Streamlit
+  - Docker
+  - "Power BI"
+  - Excel
+
+resume_file: "data/Maria_Musterfrau_DataAnalyst_2026.pdf"
+
+screening:
+  total_years_experience: 6
+  default_unlisted_skill_years: 0
+  skill_years:
+    python: 4
+    sql: 5
+    pandas: 3
+    postgresql: 3
+    docker: 2
+    "power bi": 3
+    excel: 6
+    streamlit: 2
+    "software engineering": 2
+    "ai/ml": 1
+  notice_period: "available with 4 weeks notice"
+  earliest_start_date: "2026-10-01"
+  willing_to_relocate: false
+  willing_remote: true
+  willing_hybrid: true
+  willing_onsite: true
+  has_bachelors_degree: true
+  has_drivers_license: true
+  requires_sponsorship: false
+  gender: "prefer not to say"
+
+job_search:
+  search_queries:
+    - query: "data analyst"
+      location: "Germany"
+      filters: "past 24 hours + remote"
+      resume: "data/Maria_Musterfrau_DataAnalyst_2026.pdf"
+    - query: "business intelligence analyst"
+      location: "Germany"
+      filters: "past week + remote"
+      resume: "data/Maria_Musterfrau_DataAnalyst_2026.pdf"
+    - query: "data analyst"
+      location: "Musterstadt, Germany"
+      filters: "past 24 hours"
+      resume: "data/Maria_Musterfrau_DataAnalyst_2026.pdf"
+  cv_by_title:
+    - { keyword: "business intelligence", resume: "data/Maria_Musterfrau_BI_2026.pdf" }
+    - { keyword: "reporting analyst",      resume: "data/Maria_Musterfrau_DataAnalyst_2026.pdf" }
+  company_blocklist:
+    - { company: "Beispiel Retail GmbH", until: null, reason: "example: former employer, not reapplying" }
+  titles: ["data analyst", "business intelligence analyst", "reporting analyst", "analytics engineer"]
+  locations: ["Germany", "Remote"]
+  remote_first: true
+  workplace_type: remote
+  posted_within_hours: 24
+  exclude_title_keywords: [senior, sr, lead, principal, staff, head, director, vp, manager,
+                           werkstudent, working student, intern, internship, praktikum,
+                           apprentice, junior, graduate]
+
+mail_label: "Job Applications"

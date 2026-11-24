@@ -1,0 +1,82 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+.venv-obs/
+
+# Secrets & personal data
+.env
+.env.*
+profile.yaml
+data/
+.claude/skills/cv-builder/answer_bank.md
+# Long-form grounding doc for the writer tool (QA-001/WRITE-001) — personal stories & facts
+qa_bank.md
+
+# Generated at setup by setup/render_templates.py (rendered from the tracked
+# *.template.md source + profile.yaml) — never track the live copy.
+.claude/skills/cv-builder/SKILL.md
+
+# OAuth client secret + cached tokens for the Gmail inbox tools (SECRETS — never commit).
+# token.json = F-2 read-only reader; token_modify.json = F-4 nightly sweep (gmail.modify).
+# Patterns are unanchored so they match wherever the files land (root, inbox_reader/, etc.).
+client_secret_*.json
+credentials.json
+token*.json
+
+# Private planning / design docs (kept local, out of git)
+ARCHITECTURE.md
+todo_list.md
+LEARNINGS.md
+
+# Human-readable DB mirror written at repo root by claude_applicator/db_report.sh
+# (lists the companies/roles applied to — personal data, keep out of git)
+applications_report.txt
+
+# Spreadsheet export written at repo root by claude_applicator/db_to_csv.sh
+# (same personal data as the DB — keep out of git)
+applications.csv
+application_events.csv
+
+# Browser profiles / sessions (cookies, saved logins)
+chrome-profile/
+*.session
+
+# Run artifacts
+logs/
+output/
+screenshots/
+applications.log
+
+# SQLite databases + backups, wherever they land (the real DB lives in
+# claude_applicator/, already ignored there; this also catches strays created
+# by running sqlite3 from the wrong directory — personal data, keep out of git)
+*.db
+*.db.bak*
+
+# Rendered launchd plists written by setup/setup.sh --schedule (contain this machine's
+# absolute install path + username-derived label) — never track the live copies, only
+# the *.plist.template sources under claude_applicator/.
+setup/generated/
+
+# app/ — local setup web app: its own venv and per-user runtime state (which setup
+# steps are done, cached probe results). Already caught by the generic .venv rule
+# above; listed here explicitly for clarity since this is app/'s own gitignore note.
+app/.venv/
+app/keys.json
+app/app_state.json
+
+# app/jobs/ — combined stdout/stderr logs from the Documents page's background
+# `claude -p` jobs (answer-bank generation, CV generation). Run artifacts, not source.
+app/jobs/
+
+# app/activity.ndjson — append-only local activity log (page visits, button outcomes,
+# job lifecycle) for observability while testing. Runtime artifact, never source.
+app/activity.ndjson
+.DS_Store

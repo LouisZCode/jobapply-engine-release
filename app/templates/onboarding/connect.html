@@ -1,0 +1,89 @@
+{% extends "onboarding/base.html" %}
+{% block step %}
+<h1>Connect your accounts</h1>
+<p class="wizard-lede">Two connections: LinkedIn (required — it's where the jobs are)
+and Gmail (optional — lets the engine read verification codes and track replies).</p>
+
+<div class="card">
+  <div class="card-head">LinkedIn — required</div>
+  <div class="checklist">
+    <span class="status-badge {{ 'ok' if linkedin_ok else 'bad' }}" id="li-badge">{{ 'Signed in' if linkedin_ok else 'Not signed in yet' }}</span>
+    <div>
+      <p class="note" style="margin:0 0 8px;">The engine uses a <strong>separate, dedicated
+      Chrome window</strong> with its own profile. You sign in yourself, once — the app never
+      sees or types your password. That session then lasts about a year.</p>
+      <form method="post" action="{{ url_for('onboarding_linkedin_launch') }}">
+        <button type="submit" class="btn small secondary">Open the sign-in window</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-head">Gmail — optional</div>
+  {% if gmail_ok %}
+  <p><span class="status-badge ok">Connected</span></p>
+  <p class="note">Verification emails and company replies are tracked automatically.</p>
+  {% else %}
+  {% if gmail_needs_credentials %}
+  <div class="checklist">
+    <span class="status-badge bad">Needs a key file</span>
+    <div>
+      <p class="note" style="margin:0 0 8px;">This copy of the app is missing
+      <code>credentials.json</code> (the Gmail key that ships with your copy — ask
+      whoever set you up, or skip Gmail for now).</p>
+      <form method="post" action="{{ url_for('onboarding_gmail_credentials') }}" enctype="multipart/form-data" class="wizard-inline-form">
+        <input type="file" name="credentials" accept="application/json,.json" required>
+        <button type="submit" class="btn small secondary">Add the key file</button>
+      </form>
+    </div>
+  </div>
+  {% else %}
+  <p class="note">One consent click in Google: the engine gets <strong>read-only</strong>
+  access to fish out verification codes, plus the ability to label replies (never send
+  or delete). Your mail never leaves this Mac.</p>
+  <form method="post" action="{{ url_for('onboarding_gmail_connect') }}">
+    <button type="submit" class="btn small secondary">Connect Gmail</button>
+  </form>
+  <pre class="wizard-log" id="gmail-log"></pre>
+  {% endif %}
+  {% endif %}
+</div>
+
+<form method="post" action="{{ url_for('onboarding_step') }}" class="wizard-nav">
+  <input type="hidden" name="step" value="connect">
+  <button type="submit" class="btn primary">Continue {{ '→' if linkedin_ok else 'without LinkedIn for now →' }}</button>
+</form>
+
+<script>
+(function () {
+  var badge = document.getElementById('li-badge');
+  if (badge) {
+    setInterval(function () {
+      fetch('/connections/linkedin/status').then(function (r) { return r.json(); }).then(function (d) {
+        if (d.status === 'logged_in' || d.confirmed) {
+          badge.textContent = 'Signed in';
+          badge.className = 'status-badge ok';
+        } else if (d.status === 'chrome_up') {
+          badge.textContent = 'Window open — sign in on LinkedIn';
+          badge.className = 'status-badge warn';
+        }
+      }).catch(function () {});
+    }, 3000);
+  }
+  // Gmail consent runs as a background process — poll it; when it ends (or the
+  // token appears), one reload shows the Connected state.
+  var gmailLog = document.getElementById('gmail-log');
+  if (gmailLog) {
+    setInterval(function () {
+      fetch('/onboarding/gmail/status').then(function (r) { return r.json(); }).then(function (d) {
+        gmailLog.textContent = d.log || '';
+        if (!d.running && (d.connected || (d.log || '').indexOf('DONE') >= 0)) {
+          window.location.replace(window.location.pathname);
+        }
+      }).catch(function () {});
+    }, 2000);
+  }
+})();
+</script>
+{% endblock %}

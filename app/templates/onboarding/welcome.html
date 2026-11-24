@@ -1,0 +1,39 @@
+{% extends "onboarding/base.html" %}
+{% block step %}
+<div class="wizard-hero">
+  <h1>A little help applying, every morning.</h1>
+  <p class="wizard-lede">Job Apply searches LinkedIn for roles that fit, fills in the
+  application forms with your answers, and keeps track of every one — while you sleep.
+  You stay in control: it starts in <strong>prepare mode</strong>, walking each
+  application to the final button and stopping. You press Submit.</p>
+</div>
+
+<div class="card">
+  <div class="card-head">How it works, honestly</div>
+  <ul class="wizard-list">
+    <li><strong>Your real browser.</strong> It uses your own logged-in Chrome, at a human
+    pace. No bots-behind-the-scenes tricks — that's what keeps your account safe.</li>
+    <li><strong>Your own Claude subscription</strong> does the reading and typing. Nothing
+    is submitted anywhere without the prepare-mode review unless you later switch it to
+    live mode yourself.</li>
+    <li><strong>Your data stays on this Mac.</strong> Profile, CVs, application history —
+    all local files.</li>
+    <li><strong>For personal use.</strong> This automates part of job hunting for you; it
+    respects LinkedIn's limits and applies at a modest, human-scale pace.</li>
+  </ul>
+</div>
+
+<div class="card">
+  <div class="card-head">Have these handy</div>
+  <ul class="wizard-list">
+    <li>Your LinkedIn sign-in (you'll type it once, in Chrome yourself)</li>
+    <li>Your CV as a PDF</li>
+    <li>~15 minutes</li>
+  </ul>
+</div>
+
+<form method="post" action="{{ url_for('onboarding_step') }}" class="wizard-nav">
+  <input type="hidden" name="step" value="welcome">
+  <button type="submit" class="btn primary">Get started →</button>
+</form>
+{% endblock %}

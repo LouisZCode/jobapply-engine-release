@@ -1,0 +1,38 @@
+{# Shared background-job panel. Include it with two variables set first:
+     {% set panel_names = ['cv_extract'] %}   -- which job kinds this page shows
+     {% set panel_back = 'profile' %}         -- where the Stop button returns to
+   The poller in layout.html drives it: spinner + estimated progress bar while the job
+   runs, then ONE reload (a plain GET — never a form re-submit) when it ends so the page
+   renders its finished state. Only one panel per page. #}
+{% set _show = job_status.name in panel_names and (job_status.running or job_status.log_tail or job_status.error) %}
+<div id="job-panel"
+     class="job-panel {{ 'done' if (not job_status.running and job_status.ok) else ('failed' if (not job_status.running and _show) else '') }}"
+     data-names="{{ panel_names | join(',') }}"
+     data-running="{{ 'true' if (job_status.running and _show) else 'false' }}"
+     style="{{ '' if _show else 'display:none' }}">
+  <div class="job-head">
+    <span class="spinner" id="job-spinner"></span>
+    <strong id="job-label">{{ job_status.label if _show else '' }}</strong>
+    <span class="job-meta" id="job-meta">
+      {%- if _show -%}
+        {%- if job_status.running -%}
+          {{ job_status.elapsed | int }}s
+        {%- elif job_status.ok -%}
+          Done in {{ job_status.elapsed | int }}s{% if job_status.usage %} · {{ fmt_tokens(job_status.usage.input + job_status.usage.output + job_status.usage.cache_read + job_status.usage.cache_create) }} tokens{% endif %}
+        {%- else -%}
+          Stopped after {{ job_status.elapsed | int }}s
+        {%- endif -%}
+      {%- endif -%}
+    </span>
+    <form method="post" action="{{ url_for('jobs_stop') }}" id="job-stop-form" style="{{ '' if (_show and job_status.running) else 'display:none' }}">
+      <input type="hidden" name="back" value="{{ panel_back }}">
+      <button type="submit" class="btn small ghost">Stop</button>
+    </form>
+  </div>
+  <div class="progress"><span id="job-bar" style="width: {{ job_status.progress if _show else 0 }}%"></span></div>
+  <div class="banner bad job-error" id="job-error" style="{{ '' if (_show and job_status.error) else 'display:none' }}">{{ job_status.error if _show else '' }}</div>
+  <details class="job-log" id="job-log-details">
+    <summary>Details</summary>
+    <pre class="log" id="job-log">{{ job_status.log_tail if _show else '' }}</pre>
+  </details>
+</div>

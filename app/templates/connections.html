@@ -1,0 +1,154 @@
+{% extends "layout.html" %}
+{% block title %}Connections — Job Apply{% endblock %}
+{% block content %}
+<h1>Connections</h1>
+
+{% if test_mode %}
+  <div class="banner warn">APP_TEST=1 is set — connection actions are stubbed (nothing real runs). Used for automated testing only.</div>
+{% endif %}
+
+{# LinkedIn ------------------------------------------------------------------ #}
+<div class="card" id="linkedin">
+  <div class="card-head">
+    <h2>LinkedIn</h2>
+    <span class="status-line {{ 'on' if status.linkedin_confirmed else 'off' }}">
+      <span class="dot"></span>{{ 'Connected' if status.linkedin_confirmed else 'Not connected' }}
+    </span>
+  </div>
+
+  {% if not chrome_installed %}
+    <div class="banner warn" style="margin-top:12px;">
+      <strong>Google Chrome isn't installed yet.</strong> LinkedIn runs through Chrome (in the
+      background — you don't have to switch browsers).
+      <p style="margin:8px 0 0;"><a class="btn small" href="https://www.google.com/chrome/" target="_blank" rel="noopener">Download Google Chrome</a></p>
+    </div>
+    <script>
+    (function () {
+      var t = setInterval(function () {
+        fetch("{{ url_for('prereqs') }}").then(function (r) { return r.json(); }).then(function (p) {
+          if (p.chrome) { clearInterval(t); window.location.replace(window.location.pathname + '#linkedin'); }
+        }).catch(function () {});
+      }, 4000);
+    })();
+    </script>
+  {% endif %}
+
+  {% if action_result and action_name == 'linkedin_launch' and not (action_result.ok and status.linkedin_confirmed) %}
+    <div class="banner {{ 'ok' if action_result.ok else 'bad' }}" style="margin-top:12px;">
+      {{ action_result.message or ('Chrome is open.' if action_result.ok else 'Chrome could not be opened.') }}
+      {% if not action_result.ok and (action_result.stdout or action_result.stderr) %}
+        <pre class="log">{{ (action_result.stdout ~ "\n" ~ action_result.stderr).strip() }}</pre>
+      {% endif %}
+    </div>
+  {% endif %}
+
+  <div class="actions-row">
+    <form method="post" action="{{ url_for('connections_linkedin_launch') }}">
+      <button type="submit" class="btn {{ 'secondary' if status.linkedin_confirmed else '' }}" {{ 'disabled' if not chrome_installed }}>
+        {{ 'Open LinkedIn' if status.linkedin_confirmed else 'Log in to LinkedIn' }}
+      </button>
+    </form>
+    {% if not status.linkedin_confirmed %}
+      <span class="note">Sign in once in the Chrome window that opens — this turns green by itself.</span>
+    {% endif %}
+  </div>
+
+  {% if not status.linkedin_confirmed %}
+    <script>
+    (function () {
+      var t = setInterval(function () {
+        fetch("{{ url_for('linkedin_status') }}").then(function (r) { return r.json(); }).then(function (p) {
+          if (p.confirmed) { clearInterval(t); window.location.replace(window.location.pathname + '#linkedin'); }
+        }).catch(function () {});
+      }, 4000);
+    })();
+    </script>
+  {% endif %}
+</div>
+
+{# Claude -------------------------------------------------------------------- #}
+<div class="card" id="claude">
+  <div class="card-head">
+    <h2>AI (Claude CLI)</h2>
+    <span class="status-line {{ 'on' if status.claude_connected else 'off' }}">
+      <span class="dot"></span>{{ 'Connected' if status.claude_connected else 'Not connected' }}
+    </span>
+  </div>
+
+  {% if not claude_cli %}
+    <div class="banner warn" style="margin-top:12px;">
+      <strong>The AI CLI (Claude Code) isn't installed yet.</strong> Install it, then come back here:
+      <pre class="log">curl -fsSL https://claude.ai/install.sh | bash</pre>
+    </div>
+  {% endif %}
+
+  {% if action_result and action_name == 'claude_probe' and not action_result.ok %}
+    <div class="banner bad" style="margin-top:12px;">
+      The AI CLI didn't answer — log in below, then check again.
+      {% if action_result.stdout or action_result.stderr %}
+        <pre class="log">{{ (action_result.stdout ~ "\n" ~ action_result.stderr).strip() | truncate(600) }}</pre>
+      {% endif %}
+    </div>
+  {% endif %}
+
+  {% if action_result and action_name == 'claude_terminal' %}
+    <div class="banner {{ 'ok' if action_result.ok else 'bad' }}" style="margin-top:12px;">
+      {{ 'Terminal opened — finish logging in there, then press Check.' if action_result.ok else 'Could not open Terminal.' }}
+    </div>
+  {% endif %}
+
+  <div class="actions-row">
+    {% if claude_cli and not status.claude_connected %}
+      <form method="post" action="{{ url_for('connections_claude_terminal') }}">
+        <button type="submit" class="btn">Log in to the AI</button>
+      </form>
+    {% endif %}
+    <form method="post" action="{{ url_for('connections_claude_probe') }}">
+      <button type="submit" class="btn secondary" {{ 'disabled' if not claude_cli }}>
+        {{ 'Check again' if status.claude_connected else 'Check' }}
+      </button>
+    </form>
+    {% if claude_cli and not status.claude_connected %}
+      <span class="note">Log in opens a Terminal window with your own AI account — this app never sees the password.</span>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card" id="intelligence">
+  <div class="card-head">
+    <h2>Intelligence — API keys</h2>
+    <span class="status-line {{ 'on' if key_hints else 'off' }}">
+      <span class="dot"></span>{{ '%d key%s set' % (key_hints | length, 's' if key_hints | length != 1 else '') if key_hints else 'None set' }}
+    </span>
+  </div>
+
+  {% if action_result and action_name in ('key_save', 'key_remove') %}
+    <div class="banner {{ 'ok' if action_result.ok else 'bad' }}" style="margin-top:12px;">{{ action_result.message }}</div>
+  {% endif %}
+
+  {% for pid, meta in key_providers.items() %}
+    {% set hint = key_hints.get(pid) %}
+    {% if not loop.first %}<hr class="section-divider">{% endif %}
+    <div class="field">
+      <label>{{ meta.label }}{% if hint %} — key set <code>••••{{ hint.last4 }}</code> ({{ hint.length }} chars, added {{ hint.added_at }}){% endif %}</label>
+      {% if not hint %}<p class="note">{{ meta.blurb }}</p>{% endif %}
+      {% set test = key_tests.get(pid) %}
+      {% if test %}<p class="note">Last test: {{ '✓ worked' if test.ok else '✗ failed' }} · {{ test.at }}</p>{% endif %}
+      <div class="actions-row">
+        <form method="post" action="{{ url_for('connections_keys_save') }}" class="key-form">
+          <input type="hidden" name="provider" value="{{ pid }}">
+          <input type="password" name="key" autocomplete="off" class="key-input"
+                 placeholder="{{ 'Replace key (tested on save)' if hint else 'Add your ' ~ (meta.label.split(' ')[0] | lower) ~ ' key (tested on save)' }}">
+          <button type="submit" class="btn small secondary">Save</button>
+        </form>
+        {% if hint %}
+          <form method="post" action="{{ url_for('connections_keys_remove') }}">
+            <input type="hidden" name="provider" value="{{ pid }}">
+            <button type="submit" class="btn small ghost">Remove</button>
+          </form>
+        {% endif %}
+      </div>
+    </div>
+  {% endfor %}
+</div>
+{% endblock %}
