@@ -67,6 +67,16 @@
       </label>
       <span id="theme-label">Dark mode</span>
     </div>
+    {% if current_user %}
+      {# MULTI-002: who is logged in — quiet, bottom of the sidebar. Log out ends the
+         app's run as this user and brings the login page back. #}
+      <div class="sidenav-user">
+        <span class="sidenav-user-name" title="Logged in as {{ current_user }}">{{ current_user }}</span>
+        <form method="post" action="{{ url_for('logout') }}" id="sidenav-logout">
+          <button type="submit" class="btn small ghost">Log out</button>
+        </form>
+      </div>
+    {% endif %}
   </nav>
   <main class="content">
     {% if stop_banner %}
@@ -88,6 +98,30 @@
       document.documentElement.removeAttribute('data-theme');
     }
     try { localStorage.setItem('ja-theme', box.checked ? 'dark' : 'light'); } catch (e) {}
+  });
+})();
+
+// The sidebar's Log out (MULTI-002). /logout answers JSON and ends the process (exit
+// 62 — run_app.sh's switch loop restarts the app on the login page); intercept the
+// submit so the browser never lands on raw JSON: poll /health until no user is
+// active, then go to /login. Without JS the plain form still works, JSON reply and all.
+(function () {
+  var form = document.getElementById('sidenav-logout');
+  if (!form) { return; }
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    fetch(form.getAttribute('action'), { method: 'POST', credentials: 'same-origin' })
+      .catch(function () {})
+      .then(function () {
+        var deadline = Date.now() + 15000;
+        (function poll() {
+          if (Date.now() > deadline) { window.location.href = '/login'; return; }
+          fetch('/health').then(function (r) { return r.json(); }).then(function (d) {
+            if (!d || !d.user) { window.location.href = '/login'; return; }
+            setTimeout(poll, 300);
+          }).catch(function () { setTimeout(poll, 300); });  // server mid-restart
+        })();
+      });
   });
 })();
 

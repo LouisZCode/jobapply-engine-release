@@ -184,22 +184,67 @@ def cv_pdf_exists():
     return bool(cv_pdfs())
 
 
+# The plist templates' own header comments contain "--" (e.g. "--schedule"), which
+# macOS's plist parser (launchd/plutil) tolerates but strict XML (Python's plistlib)
+# rejects — so the user is read from the raw text, never via an XML parser.
+_PLIST_USER_RE = re.compile(
+    r"<key>EnvironmentVariables</key>\s*<dict>.*?<key>JOBAPPLY_USER</key>\s*"
+    r"<string>([^<]*)</string>",
+    re.DOTALL,
+)
+
+
+def _plist_user(path):
+    """MULTI-002b: the user a launchd plist belongs to — its EnvironmentVariables
+    JOBAPPLY_USER value, or None for the old single-user schedule (no env block).
+    Never raises: an unreadable/foreign plist just reads as the old layout."""
+    try:
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            text = fh.read()
+    except OSError:
+        return None
+    m = _PLIST_USER_RE.search(text)
+    if not m:
+        return None
+    user = m.group(1).strip()
+    return user or None
+
+
 def installed_launch_agent_plists():
     """launchd plists installed under ~/Library/LaunchAgents that look like this
-    pipeline's (com.<user>.jobapply*.plist / com.<user>.jobhealth*.plist)."""
+    pipeline's — the old single-user names (com.<user>.jobapply.plist /
+    com.<user>.jobhealth.plist) AND the per-user names (com.<user>.jobapply-<name>.plist
+    / com.<user>.jobhealth-<name>.plist, MULTI-002b). Returns a sorted list of
+    (path, user) pairs: user is the plist's EnvironmentVariables.JOBAPPLY_USER value,
+    None for the old single-user schedule."""
     if not os.path.isdir(paths.LAUNCH_AGENTS_DIR):
         return []
     hits = []
-    for pattern in ("com.*.jobapply.plist", "com.*.jobhealth.plist"):
-        hits.extend(glob.glob(os.path.join(paths.LAUNCH_AGENTS_DIR, pattern)))
+    seen = set()
+    for pattern in ("com.*.jobapply.plist", "com.*.jobapply-*.plist",
+                    "com.*.jobhealth.plist", "com.*.jobhealth-*.plist"):
+        for path in glob.glob(os.path.join(paths.LAUNCH_AGENTS_DIR, pattern)):
+            if path in seen:
+                continue
+            seen.add(path)
+            hits.append((path, _plist_user(path)))
     return sorted(hits)
+
+
+def own_launch_agent_plists():
+    """MULTI-002 review: the installed schedules that belong to whoever this process
+    serves — the active user's per-user plists in user mode, the old single-user ones
+    (no user) otherwise. Another person's schedule on the same Mac is not "installed"
+    from this session's point of view, so Home and the Schedule page ignore it here."""
+    wanted = os.environ.get("JOBAPPLY_USER") or None
+    return [(p, u) for p, u in installed_launch_agent_plists() if u == wanted]
 
 
 def compute_status():
     """Returns (status_dict, state_dict). status_dict has the 8 checklist keys, each
     a bool, computed by preferring a live check where one exists."""
     state = load_state()
-    schedule_live = bool(installed_launch_agent_plists())
+    schedule_live = bool(own_launch_agent_plists())
     status = {
         "profile_saved": profile_exists(),
         "rendered": rendered_exists(),

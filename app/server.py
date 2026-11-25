@@ -35,12 +35,15 @@ if APP_DIR not in sys.path:
 
 from fastapi import FastAPI, Request  # noqa: E402
 from fastapi.responses import JSONResponse, RedirectResponse  # noqa: E402
+import asyncio  # noqa: E402
+from starlette.background import BackgroundTask  # noqa: E402
 from starlette.concurrency import run_in_threadpool  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 from fastapi.templating import Jinja2Templates  # noqa: E402
 
 from lib import actions, activity, jobs, llm, onboarding, paths, profile_io, state, usage  # noqa: E402
 from lib import dbschema, keys as key_store  # noqa: E402
+from lib import users  # noqa: E402
 
 # Auto-setup: the database used to need a manual "Initialize" button on the home page.
 # It's now created silently the first time the app starts, if it isn't there yet — see
@@ -48,10 +51,22 @@ from lib import dbschema, keys as key_store  # noqa: E402
 # banner if it FAILED; on success nothing is shown to the user, just a stdout log line.
 _startup_init_result = None
 
+# MULTI-002: the session cookie name (HttpOnly, SameSite=Strict, path=/ — see the
+# login/logout routes). 62 is the exit code that asks run_app.sh's switch loop to
+# restart the server for another user (or the login page).
+SESSION_COOKIE = "ja_session"
+SWITCH_EXIT_CODE = 62
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _startup_init_result
+    # MULTI-002: login mode (JOBAPPLY_DATA unset) knows no user — nothing under the
+    # engine directory may be read or written there, so the silent DB setup and the
+    # column migration both wait until the loop restarts the server as a real user.
+    if users.login_mode():
+        yield
+        return
     if not state.db_exists():
         result = actions.init_db()
         if result.get("ok"):
@@ -71,10 +86,10 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
-# Local single-user app with no login system — no session/secret-key machinery is needed
-# at all (Flask carried a per-process secret_key for its session/flash system, but this
-# app never used flash() or the session; FastAPI/Starlette have no equivalent to opt into
-# here, so it's simply gone).
+# MULTI-002 turned the "no login system at all" note on its head: there now is one
+# (lib/users.py), but it stays as small as the shared-Mac threat model — a session
+# cookie checked by the require_session middleware, no accounts machinery, no
+# secret-key flash system (Flask's was never used and FastAPI has none to opt into).
 templates = Jinja2Templates(directory=os.path.join(APP_DIR, "templates"))
 # Cache-buster for static assets: the stylesheet's own mtime. Without this, browsers
 # kept a stale cached style.css across app updates — new CSS classes (e.g. the ⓘ
@@ -96,7 +111,9 @@ async def activity_log(request: Request, call_next):
     started = time.time()
     response = await call_next(request)
     path = request.url.path
-    if not path.startswith("/static") and path not in ACTIVITY_SKIP_PATHS:
+    # MULTI-002: in login mode nothing may be written anywhere (paths.ACTIVITY_FILE
+    # would point at the repo location) — the log waits for a user, like everything else.
+    if not users.login_mode() and not path.startswith("/static") and path not in ACTIVITY_SKIP_PATHS:
         activity.log_event(
             "request",
             method=request.method,
@@ -105,6 +122,34 @@ async def activity_log(request: Request, call_next):
             ms=int((time.time() - started) * 1000),
         )
     return response
+
+
+# MULTI-002: the session gate. It is defined AFTER activity_log above on purpose:
+# Starlette runs the LAST-registered http middleware FIRST (add_middleware inserts at
+# index 0), so this one wraps activity_log and a rejected request never reaches the
+# logger at all. Login mode (JOBAPPLY_DATA unset) serves only the login page; user
+# mode (JOBAPPLY_DATA + JOBAPPLY_USER, set by run_app.sh's switch loop) requires the
+# session cookie; JOBAPPLY_DATA set without a user (tests, development, the old
+# single-user way) is untouched — no login page, no gate.
+@app.middleware("http")
+async def require_session(request: Request, call_next):
+    path = request.url.path
+    if path.startswith("/static"):
+        return await call_next(request)
+    if users.login_mode():
+        if path in ("/health", "/login", "/users/new", "/logout"):
+            return await call_next(request)
+        return RedirectResponse("/login", status_code=303)
+    active = users.active_user()
+    if not active:
+        return await call_next(request)
+    # /login stays reachable with an expired session (the page then offers only Log
+    # out — the way back to the full login page); redirecting it would loop on itself.
+    if path in ("/health", "/logout", "/login"):
+        return await call_next(request)
+    if not users.session_valid(active, request.cookies.get(SESSION_COOKIE)):
+        return RedirectResponse("/login", status_code=303)
+    return await call_next(request)
 
 
 def render(request, name, ctx):
@@ -161,6 +206,9 @@ def base_context(active):
     ]
     return {
         "active": active,
+        # MULTI-002: who is logged in — layout.html's sidebar row (hidden when None,
+        # e.g. the old single-user way where no user was ever named).
+        "current_user": users.active_user(),
         "status": status,
         "steps": steps,
         "steps_done": sum(1 for s in steps if s["done"]),
@@ -251,7 +299,116 @@ async def health():
     # ELECTRON-008: identity marker for the tower's port-reuse check. The tower
     # reuses an already-serving port ONLY if this route says the server is ours —
     # a foreign app on the port must never get embedded in the tower window.
-    return {"status": "ok", "app": "jobapply"}
+    # MULTI-002 adds "user" — the login page polls it to see when the switch loop
+    # has restarted the server as the requested user (null = login page).
+    return {"status": "ok", "app": "jobapply", "user": users.active_user()}
+
+
+# ------------------------------------------------------------------------------
+# MULTI-002 — LOGIN / USERS / SWITCH. The shared-Mac front door. One process serves
+# one user; switching is cooperative: write the next user (or "login") to
+# <users dir>/.switch, answer the browser, then end the process (exit 62) so
+# run_app.sh's loop restarts it with that user's env. The browser polls /health while
+# that happens (see login.html). Nothing personal ships in the product: users and their
+# data live under the users dir, outside the repo.
+# ------------------------------------------------------------------------------
+
+def switch_exit():
+    """End this server process so the switch loop restarts it as <users dir>/.switch
+    says. os._exit (not sys.exit): uvicorn must not unwind its signal machinery first —
+    the response is already sent (this only ever runs as a response BackgroundTask).
+    Module-level and name-based so tests can replace it with a no-op."""
+    os._exit(SWITCH_EXIT_CODE)
+
+
+def _login_context():
+    names = users.list_users()
+    return {
+        "users": names,
+        "active": users.active_user(),
+        # Offered only to the FIRST user on a Mac that still has the old single-user
+        # files — the note + checkbox are hidden as soon as anyone exists.
+        "legacy": not names and users.legacy_setup_present(),
+    }
+
+
+@app.get("/login")
+async def login_page(request: Request):
+    # In user mode this page is only the way out: "Logged in as <name>" + Log out (see
+    # login.html) — the full picker exists only when nobody is logged in.
+    return render(request, "login.html", _login_context())
+
+
+@app.post("/login")
+async def login_submit(request: Request):
+    form = await request.form()
+    name = users.clean_name(form.get("name"))
+    password = form.get("password") or ""
+    record = users.load(name) if users.name_ok(name) else None
+    if record is None:
+        # The pause is a small brake on guessing (a shared-Mac separator, not a vault);
+        # awaited, never slept, so other requests are not stalled with it.
+        await asyncio.sleep(0.4)
+        return JSONResponse({"ok": False, "error": "No such user."})
+    if not users.verify_password(record.get("password"), password):
+        await asyncio.sleep(0.4)
+        return JSONResponse({"ok": False, "error": "Wrong password."})
+    return _switch_response(name, users.issue_session(name))
+
+
+@app.post("/users/new")
+async def users_new(request: Request):
+    form = await request.form()
+    name = users.clean_name(form.get("name"))
+    password = form.get("password") or ""
+    confirm = form.get("confirm") or ""
+
+    if not users.name_ok(name):
+        return JSONResponse({"ok": False, "error": "Name must be 3-24 characters: lowercase letters, numbers, - or _."})
+    if users.load(name) is not None:
+        return JSONResponse({"ok": False, "error": "That name is already taken."})
+    if len(password) < 4:
+        return JSONResponse({"ok": False, "error": "Password must be at least 4 characters."})
+    if password != confirm:
+        return JSONResponse({"ok": False, "error": "The two passwords don't match."})
+
+    # Decide BEFORE create(): once this user exists, this Mac is no longer user-less —
+    # the legacy setup can only be adopted by the first one.
+    may_adopt = not users.list_users() and users.legacy_setup_present()
+    try:
+        record = users.create(name, password)
+    except ValueError as exc:
+        return JSONResponse({"ok": False, "error": str(exc)})
+    if (form.get("adopt") or "").strip() == "on" and may_adopt:
+        try:
+            users.adopt_legacy(record["data_root"])
+        except OSError as exc:
+            # The user exists and can log in either way; adoption is a best-effort copy.
+            print("[users] legacy adoption failed: {}".format(exc))
+    return _switch_response(name, users.issue_session(name))
+
+
+@app.post("/logout")
+async def logout(request: Request):
+    active = users.active_user()
+    if active:
+        users.clear_session(active)
+    users.request_switch("login")
+    response = JSONResponse({"ok": True})
+    response.delete_cookie(SESSION_COOKIE, path="/", samesite="strict")
+    response.background = BackgroundTask(switch_exit)
+    return response
+
+
+def _switch_response(name, token):
+    """The shared tail of a successful login/create: session token written, the switch
+    file pointing at `name`, the cookie set, and exit 62 queued as a background task so
+    the browser gets its JSON answer before the process ends."""
+    users.request_switch(name)
+    response = JSONResponse({"ok": True, "user": name})
+    response.set_cookie(SESSION_COOKIE, token, httponly=True, samesite="strict", path="/")
+    response.background = BackgroundTask(switch_exit)
+    return response
 
 
 @app.get("/")
@@ -443,8 +600,11 @@ async def onboarding_wizard(request: Request):
     elif step_key == "connect":
         extra.update({
             "linkedin_ok": bool(state.load_state().get("linkedin_confirmed")),
-            "gmail_ok": os.path.isfile(os.path.join(paths.ENGINE_DIR, "inbox_reader", "token.json")),
-            "gmail_needs_credentials": not os.path.isfile(os.path.join(paths.ENGINE_DIR, "inbox_reader", "credentials.json")),
+            # MULTI-002b: Gmail files are per-user — paths.shadow() is the user's copy
+            # under the data root (where the app's upload + connect flow writes them);
+            # unset = the engine directory, exactly as before.
+            "gmail_ok": os.path.isfile(paths.shadow("claude_applicator/inbox_reader/token.json")),
+            "gmail_needs_credentials": not os.path.isfile(paths.shadow("claude_applicator/inbox_reader/credentials.json")),
         })
     elif step_key == "finish":
         st = state.load_state()
@@ -583,7 +743,9 @@ async def onboarding_gmail_credentials(request: Request):
     form = await request.form()
     upload = form.get("credentials")
     filename = getattr(upload, "filename", None) if upload is not None else None
-    inbox = os.path.join(paths.ENGINE_DIR, "inbox_reader")
+    # MULTI-002b: the key file goes to the user's copy under the data root
+    # (paths.shadow); unset = the engine directory, exactly as before.
+    creds_path = paths.shadow("claude_applicator/inbox_reader/credentials.json")
     if not filename:
         flash("onboarding", cv_banner="No file selected.")
     elif not filename.lower().endswith(".json"):
@@ -598,8 +760,8 @@ async def onboarding_gmail_credentials(request: Request):
         except ValueError:
             flash("onboarding", cv_banner="That file isn't a valid Google OAuth client key.")
         else:
-            os.makedirs(inbox, exist_ok=True)
-            with open(os.path.join(inbox, "credentials.json"), "wb") as fh:
+            os.makedirs(os.path.dirname(creds_path), exist_ok=True)
+            with open(creds_path, "wb") as fh:
                 fh.write(data)
             activity.log_event("onboarding", step="connect", event="gmail_credentials_added")
             flash("onboarding", cv_banner="Key file added — you can connect Gmail now.")
@@ -636,7 +798,7 @@ async def onboarding_gmail_status():
                 tail = "".join(fh.readlines()[-8:])
         except OSError:
             pass
-    connected = os.path.isfile(os.path.join(paths.ENGINE_DIR, "inbox_reader", "token.json"))
+    connected = os.path.isfile(paths.shadow("claude_applicator/inbox_reader/token.json"))
     return JSONResponse({"running": running, "connected": connected, "log": tail})
 
 
@@ -1058,6 +1220,15 @@ def schedule_context(run_time=None, max_applies=None, mode=None, result=None, to
     ctx["max_applies"] = max_applies if max_applies is not None else st.get("schedule_max_applies", 3)
     ctx["mode"] = mode if mode is not None else st.get("schedule_mode", "prepare")
     ctx["installed_plists"] = state.installed_launch_agent_plists()
+    # MULTI-002b: who the installed schedule belongs to. Per-user plists carry their
+    # user in EnvironmentVariables; the pre-login plists have no env block (user None).
+    current = users.active_user()
+    ctx["schedule_installed_user"] = (
+        current if current and any(u == current for _p, u in ctx["installed_plists"]) else None
+    )
+    ctx["legacy_schedule_installed"] = bool(
+        current and any(u is None for _p, u in ctx["installed_plists"])
+    )
     ctx["test_mode"] = actions.test_mode()
     ctx["readiness_items"], ctx["ready"] = _readiness_with_hrefs()
     ctx["result"] = result

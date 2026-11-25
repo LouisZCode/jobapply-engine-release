@@ -14,6 +14,10 @@ set -uo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # MULTI-001: per-user data root (defaults to this script's dir = today's location).
 DATA_ROOT="${JOBAPPLY_DATA:-$DIR}"
+# MULTI-002b: bind the engine directory to THIS user's files before reading anything
+# (fails with a clear message when the user's rendered CLAUDE.md is missing — a health
+# check must not report on another user's state either).
+bash "$DIR/bind_user.sh" || exit 1
 STATUS="$DATA_ROOT/output/health_status.json"
 LOG="$DATA_ROOT/output/health_check.log"
 mkdir -p "$DATA_ROOT/output"

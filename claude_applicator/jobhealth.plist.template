@@ -2,16 +2,20 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!-- Template — setup renders this to a real ~/Library/LaunchAgents/<label_prefix>.jobhealth.plist,
      substituting {{label_prefix}} (a reverse-DNS-style namespace unique to the install, e.g.
-     com.<username>) and {{install_path}} (this repo's absolute path on the target machine). -->
+     com.<username>), {{install_path}} (this repo's absolute path on the target machine),
+     {{label_suffix}} ("-<user>" for a per-user schedule, MULTI-002b) and the env-block
+     placeholder on its own line (the per-user EnvironmentVariables block; removed for
+     the old single-user schedule). -->
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>{{label_prefix}}.jobhealth</string>
+  <string>{{label_prefix}}.jobhealth{{label_suffix}}</string>
 
   <key>ProgramArguments</key>
   <array>
     <string>{{install_path}}/claude_applicator/check_health.sh</string>
   </array>
+  {{env_block}}
 
   <!-- Daily at 09:00 local — RB-1 health heartbeat check: verifies the scheduled apply
        run and the nightly mail sweep both completed OK (output/health_status.json,

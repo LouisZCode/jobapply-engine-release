@@ -72,4 +72,42 @@ if [[ "${JOBAPPLY_NO_BROWSER:-0}" != "1" ]]; then
 fi
 
 cd "$REPO_ROOT"
-exec "$PY" "$SCRIPT_DIR/server.py"
+
+# MULTI-002: when JOBAPPLY_DATA is already set at launch (tests, development, the old
+# single-user way) nothing changes — plain exec, no login page, no loop. Otherwise this
+# is the switch loop: the server ends itself with exit code 62 to ask for a restart as
+# another user (or as the login page). It writes the next user (or "login") to
+# <users dir>/.switch; we read it, export that user's env from their user.json and start
+# the server again on the same port. Never abort on the server's exit code (no set -e
+# here; keep set -uo pipefail).
+if [[ -n "${JOBAPPLY_DATA:-}" ]]; then
+  exec "$PY" "$SCRIPT_DIR/server.py"
+fi
+
+export JOBAPPLY_USERS_DIR="${JOBAPPLY_USERS_DIR:-${JOBAPPLY_ENGINE_HOME:-$HOME/JobApply}/users}"
+
+while true; do
+  "$PY" "$SCRIPT_DIR/server.py"
+  CODE=$?
+  if [[ "$CODE" -ne 62 ]]; then
+    exit "$CODE"
+  fi
+  NEXT=""
+  if [[ -f "$JOBAPPLY_USERS_DIR/.switch" ]]; then
+    NEXT="$(tr -d '[:space:]' < "$JOBAPPLY_USERS_DIR/.switch")"
+  fi
+  if [[ -z "$NEXT" || "$NEXT" == "login" ]]; then
+    unset JOBAPPLY_DATA JOBAPPLY_USER JOBAPPLY_CHROME_PROFILE JOBAPPLY_CDP_PORT
+    echo "[run_app] login page"
+  else
+    # data_root, chrome_profile, cdp_port — one line, tab-separated (chrome_profile
+    # contains spaces, so the separator must not be a plain space).
+    LINE="$("$PY" -c 'import json,sys
+u = json.load(open(sys.argv[1]))
+print(u["data_root"] + "\t" + u["chrome_profile"] + "\t" + str(u["cdp_port"]))' "$JOBAPPLY_USERS_DIR/$NEXT/user.json")"
+    IFS=$'\t' read -r DATA_ROOT CHROME_PROFILE CDP_PORT <<< "$LINE"
+    export JOBAPPLY_DATA="$DATA_ROOT" JOBAPPLY_USER="$NEXT" \
+           JOBAPPLY_CHROME_PROFILE="$CHROME_PROFILE" JOBAPPLY_CDP_PORT="$CDP_PORT"
+    echo "[run_app] user: $NEXT"
+  fi
+done

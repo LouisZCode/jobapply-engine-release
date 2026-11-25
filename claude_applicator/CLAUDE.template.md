@@ -12,13 +12,13 @@ written through the **sqlite** MCP server (`applications.db`, schema in `schema.
 
 ---
 
-## CURRENT MODE — read it FRESH from `run_config.txt`
+## CURRENT MODE — read it FRESH from `{{run_config_path}}`
 
-All run switches live in one file: **`run_config.txt`** (MODE, MAX_APPLIES_PER_RUN, DAILY_APPLY_CAP,
+All run switches live in one file: **`{{run_config_path}}`** (MODE, MAX_APPLIES_PER_RUN, DAILY_APPLY_CAP,
 ACTION_DELAY_SECONDS, APPLY_GAP_SECONDS, RUN_WINDOW_LOCAL, WRITING_MODE) — it is the **single source of truth**.
-At the start of EVERY run (Preflight, step 1) **read `run_config.txt` fresh from disk with the Read
+At the start of EVERY run (Preflight, step 1) **read `{{run_config_path}}` fresh from disk with the Read
 tool** and use those values for the whole run. Do NOT trust any copy of these values pasted into
-this file or already loaded in your context — only the on-disk `run_config.txt` counts, so a
+this file or already loaded in your context — only the on-disk `{{run_config_path}}` counts, so a
 mid-session edit to a switch always takes effect. Re-read `MODE` from the file before the first
 apply and again before every Submit, so prepare-vs-live is read, never guessed.
 
@@ -226,7 +226,7 @@ and report to the user. Do **not** run the routine again until the user confirms
 ---
 
 ## Per-run procedure
-1. **Preflight.** **Read `run_config.txt` fresh from disk first** (the authoritative MODE / caps /
+1. **Preflight.** **Read `{{run_config_path}}` fresh from disk first** (the authoritative MODE / caps /
    pacing / run window for this run — never trust a copy already in context), then read `profile.yaml`.
    - **Run window:** check `date`; if local time is outside `RUN_WINDOW_LOCAL`, STOP (log "outside run window").
    - **Daily cap:** run the 24h count (see **Safety & pacing**). If ≥ `DAILY_APPLY_CAP`, STOP (log "daily cap reached").

@@ -340,11 +340,18 @@ def label_prefix():
 def install_schedule():
     """Copies the two generated plists into ~/Library/LaunchAgents and loads them
     with `launchctl bootstrap gui/$UID <plist>`, boot-out-ing first if already loaded
-    (idempotent re-install). Gated behind APP_TEST."""
+    (idempotent re-install). Gated behind APP_TEST.
+    MULTI-002b: with JOBAPPLY_USER set, the generated files carry the user suffix
+    (setup.sh --schedule rendered them per-user — labels AND EnvironmentVariables
+    block), so this installs this user's schedule and never touches another's."""
     prefix = label_prefix()
+    user = os.environ.get("JOBAPPLY_USER") or None
+    suffix = "-{}".format(user) if user else ""
     plists = [
-        ("{}.jobhealth.plist".format(prefix), os.path.join(paths.GENERATED_DIR, "{}.jobhealth.plist".format(prefix))),
-        ("{}.jobapply.plist".format(prefix), os.path.join(paths.GENERATED_DIR, "{}.jobapply.plist".format(prefix))),
+        ("{}.jobhealth{}.plist".format(prefix, suffix),
+         os.path.join(paths.GENERATED_DIR, "{}.jobhealth{}.plist".format(prefix, suffix))),
+        ("{}.jobapply{}.plist".format(prefix, suffix),
+         os.path.join(paths.GENERATED_DIR, "{}.jobapply{}.plist".format(prefix, suffix))),
     ]
     if test_mode():
         would = "; ".join(
@@ -536,7 +543,13 @@ def update_run_config(mode, max_applies):
 # ------------------------------------------------------------------------------
 
 def _launchd_label(agent):
-    return "{}.{}".format(label_prefix(), agent)
+    """MULTI-002b: the launchd label for the ACTIVE user when JOBAPPLY_USER is set
+    (<prefix>.<agent>-<user>), today's unsuffixed label otherwise. Per-user labels keep
+    every install/toggle/remove below on THIS user's schedule and never touch another
+    user's or the old single-user label."""
+    user = os.environ.get("JOBAPPLY_USER") or None
+    label = "{}.{}".format(label_prefix(), agent)
+    return "{}-{}".format(label, user) if user else label
 
 
 def _agent_installed(agent):
@@ -618,13 +631,17 @@ def schedule_toggle(enabled):
 def health_snapshot():
     """Read-only view of output/health_status.json in check_health.sh's own
     terms (apply OK today? sweep stale >26h? last rc?), minus the notifications.
-    Returns a plain dict for the Schedule + Home templates; never raises."""
+    Returns a plain dict for the Schedule + Home templates; never raises.
+    MULTI-002b: the engine's run scripts write it under the per-user data root's
+    output/ (JOBHEALTH_STATUS_PATH in run_scheduled.sh and friends); unset = the
+    engine directory (today's path)."""
     import datetime
     import json as _json
 
+    root = paths.DATA_ROOT or paths.ENGINE_DIR
     path = os.environ.get(
         "APP_TEST_HEALTH_STATUS",
-        os.path.join(paths.ENGINE_DIR, "output", "health_status.json"),
+        os.path.join(root, "output", "health_status.json"),
     )
     try:
         with open(path, encoding="utf-8") as fh:

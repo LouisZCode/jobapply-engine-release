@@ -6,9 +6,9 @@
         "-y",
         "@playwright/mcp@0.0.80",
         "--cdp-endpoint",
-        "http://127.0.0.1:9222",
+        "http://127.0.0.1:${JOBAPPLY_CDP_PORT:-9222}",
         "--output-dir",
-        "./output"
+        "${JOBAPPLY_DATA:-.}/output"
       ]
     },
     "sqlite": {

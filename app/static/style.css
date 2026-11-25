@@ -761,3 +761,29 @@ code.inline {
    without inline styles (ui CM law: class in the sheet, never inline). */
 .actions-row .key-form { display: flex; gap: 8px; align-items: center; }
 .actions-row .key-input { min-width: 220px; }
+
+/* ------------------------------------------------------------------ */
+/* MULTI-002 — the login page (wizard frame, so only the few bits the door
+   doesn't already have) and the sidebar's logged-in row. */
+.login-users { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.login-toggle { text-align: center; margin: 0; font-size: 13px; }
+.login-adopt label.login-check { display: flex; align-items: center; gap: 8px; font-weight: 500; font-size: 13px; cursor: pointer; }
+
+.sidenav-user {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.sidenav-user-name {
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sidenav-user .btn { flex-shrink: 0; }

@@ -183,17 +183,25 @@ portfolio_projects:
     desc: "A small open-source CLI that diffs two JSON API responses and highlights schema drift."
 """
 
-CV_GENERATE_PROMPT = (
-    "Use the cv-builder skill to build a CV PDF for this profile. Read "
-    ".claude/skills/cv-builder/SKILL.md for the house style and steps, and ground every fact "
-    "ONLY in .claude/skills/cv-builder/answer_bank.md and claude_applicator/profile.yaml — never "
-    "invent an employer, date, metric, tool, or certification. If no role angle is specified, "
-    "pick a sensible general-purpose angle from the 'Role variants' section of the answer bank. "
-    "Render the CV to PDF following the skill's own steps (copy template.html into a draft, fill "
-    "it in, then render.sh), then copy the finished PDF into claude_applicator/data/ so the "
-    "job-application pipeline can pick it up. Report the final PDF filename on the last line of "
-    "your output."
-)
+def _cv_generate_prompt():
+    # MULTI-002b: name the ACTIVE user's files absolutely — the job's claude runs from
+    # the repo root, where those paths are per-user symlinks only once
+    # claude_applicator/bind_user.sh has run (the app can start this job before any
+    # engine run did). The skill's tracked tools (template.html, render.sh) stay at
+    # their repo paths either way; with JOBAPPLY_DATA unset every path below is exactly
+    # today's repo-relative location.
+    return (
+        "Use the cv-builder skill to build a CV PDF for this profile. Read "
+        + paths.SKILL_MD + " for the house style and steps, and ground every fact "
+        "ONLY in " + paths.SKILL_ANSWER_BANK + " and " + paths.PROFILE_YAML + " — never "
+        "invent an employer, date, metric, tool, or certification. If no role angle is specified, "
+        "pick a sensible general-purpose angle from the 'Role variants' section of the answer bank. "
+        "Render the CV to PDF following the skill's own steps (the tracked template.html and "
+        "render.sh live in .claude/skills/cv-builder/ — copy template.html into a draft, fill "
+        "it in, then render.sh), then copy the finished PDF into " + paths.CV_DATA_DIR + "/ so the "
+        "job-application pipeline can pick it up. Report the final PDF filename on the last line of "
+        "your output."
+    )
 
 
 def _job_dir():
@@ -654,7 +662,7 @@ def start_cv_generate_job():
         return False, "No CV answer bank yet — generate and save one in the Answer bank section above first."
     if not os.path.isfile(paths.SKILL_MD):
         return False, "Profile isn't rendered yet — save it on the Profile page first."
-    return _start("cv_generate", CV_GENERATE_PROMPT, CV_GENERATE_TIMEOUT_S, max_turns=100)
+    return _start("cv_generate", _cv_generate_prompt(), CV_GENERATE_TIMEOUT_S, max_turns=100)
 
 
 def _cv_extract_prompt(pdf_path):

@@ -15,8 +15,10 @@ Deliberate design points:
 - The browser consent page opens in the DEFAULT browser (InstalledAppFlow's own
   behavior). Inside the Electron tower, external windows are handed to the system
   browser anyway, so this behaves identically there.
-- Tokens land at the exact paths gmail_auth.py reads (token.json,
-  token_modify.json in claude_applicator/inbox_reader/) — no new config anywhere.
+- Tokens land where gmail_auth.py reads them (token.json, token_modify.json in
+  claude_applicator/inbox_reader/) — no new config anywhere. MULTI-002b: with
+  JOBAPPLY_DATA set they land in THAT user's copy under the data root (the same files
+  the engine reads through bind_user.sh's symlinks).
 - Exit codes: 0 ok, 2 missing python deps, 3 missing credentials.json, 1 failure.
   Everything human-readable goes to stdout, one line at a time, so the calling
   route can show the tail verbatim.
@@ -26,7 +28,15 @@ import sys
 
 APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REPO_ROOT = os.path.dirname(APP_DIR)
-INBOX_DIR = os.path.join(REPO_ROOT, "claude_applicator", "inbox_reader")
+
+# MULTI-002b: per-user Gmail files — this app-side WRITER (it mints/replaces the cached
+# tokens) targets the user's copy under the data root. Unset = the engine directory
+# (today's paths, byte-identical).
+DATA_ROOT = os.environ.get("JOBAPPLY_DATA") or None
+INBOX_DIR = (
+    os.path.join(DATA_ROOT, "claude_applicator", "inbox_reader") if DATA_ROOT
+    else os.path.join(REPO_ROOT, "claude_applicator", "inbox_reader")
+)
 
 CREDS = os.path.join(INBOX_DIR, "credentials.json")
 SCOPES = [

@@ -24,6 +24,10 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # MULTI-001: per-user data root (heartbeat log, sweep lock, health_status.json).
 # Default = script dir = today's behavior byte-identical when JOBAPPLY_DATA unset.
 DATA_ROOT="${JOBAPPLY_DATA:-$DIR}"
+# MULTI-002b: bind the engine directory to THIS user's files (user_mail.json, tokens,
+# credentials, applications.db) before the sweep reads them; fails with a clear message
+# when the user's rendered CLAUDE.md is missing.
+bash "$DIR/bind_user.sh" || exit 1
 PY="$DIR/inbox_reader/.venv/bin/python"
 SWEEP="$DIR/inbox_reader/sweep_responses.py"
 LOG_DIR="$DATA_ROOT/output"; mkdir -p "$LOG_DIR"

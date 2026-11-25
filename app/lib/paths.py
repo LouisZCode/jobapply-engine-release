@@ -14,6 +14,21 @@ SETUP_DIR = os.path.join(REPO_ROOT, "setup")
 # byte-identical to what it always was).
 DATA_ROOT = os.environ.get("JOBAPPLY_DATA") or None
 
+
+def shadow(rel):
+    """MULTI-002b: this user's copy of a repo-relative file.
+
+    The data root shadows the repo: a personal file the engine reads at <repo>/<rel>
+    lives, for a user, at <DATA_ROOT>/<rel> (same relative path), where
+    setup/render_templates.py writes it and claude_applicator/bind_user.sh points the
+    repo path at it with a symlink. With JOBAPPLY_DATA unset this is just the repo path
+    (the old single-user layout, byte-identical). Files paths.py keeps somewhere else
+    under the data root (user.env, run_config.txt) never go through here.
+    """
+    if DATA_ROOT:
+        return os.path.join(DATA_ROOT, rel)
+    return os.path.join(REPO_ROOT, rel)
+
 PROFILE_TEMPLATE = os.path.join(ENGINE_DIR, "profile.template.yaml")
 PROFILE_YAML = os.path.join(ENGINE_DIR, "profile.yaml")
 USER_ENV = os.path.join(ENGINE_DIR, "user.env")
@@ -64,6 +79,15 @@ if DATA_ROOT:
     ACTIVITY_FILE = os.path.join(DATA_ROOT, "app", "activity.ndjson")
     # Re-derived from the relocated JOBS_DIR (was already JOBS_DIR-relative above).
     CV_EXTRACT_OUTPUT_YAML = os.path.join(JOBS_DIR, "cv_extract_output.yaml")
+    # MULTI-002b: the cv-builder skill's two personal files follow the shadow rule like
+    # every other engine doc (render_templates.py writes SKILL.md to shadow(); the
+    # answer bank is per-user personal data). The repo skill dir keeps the tracked
+    # tools (template.html, render.sh) and gets SKILL.md/answer_bank.md as bind_user.sh
+    # symlinks for everything that works relative to the repo. Nothing pinned these to
+    # the repo path under a data root before, so no behavior changes when unset.
+    SKILL_DIR = shadow(".claude/skills/cv-builder")
+    SKILL_ANSWER_BANK = os.path.join(SKILL_DIR, "answer_bank.md")
+    SKILL_MD = os.path.join(SKILL_DIR, "SKILL.md")
 
 LAUNCH_AGENTS_DIR = os.path.join(os.path.expanduser("~"), "Library", "LaunchAgents")
 

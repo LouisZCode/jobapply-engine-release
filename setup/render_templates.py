@@ -3,10 +3,18 @@
 
 Reads claude_applicator/profile.yaml (per-user data, gitignored — never committed) and
 renders every tracked engine doc's `*.template.md` source to its live path, substituting
-the three doc placeholders {{user_first_name}}, {{user_full_name}}, {{mail_label}}. Also
+the doc placeholders {{user_first_name}}, {{user_full_name}}, {{mail_label}} and
+{{run_config_path}} (MULTI-002b: the user's run_config.txt path). Also
 writes the two small generated config files the CODE side (shell scripts / python tools)
 reads at runtime: claude_applicator/user.env and
 claude_applicator/inbox_reader/user_mail.json.
+
+MULTI-002b: when JOBAPPLY_DATA is set, every rendered file is written under the data
+root at the same relative path (the data root shadows the repo — see shadow() below);
+claude_applicator/bind_user.sh points the repo paths at those copies with symlinks so
+the engine still finds them relative to its own directory. user.env stays at
+<DATA_ROOT>/user.env (where app/lib/paths.py and the run scripts read it). With
+JOBAPPLY_DATA unset every target is exactly today's path.
 
 None of the outputs are tracked in git (see .gitignore) — this script is what recreates
 them locally, on first setup and again any time profile.yaml changes.
@@ -39,11 +47,20 @@ except ImportError:
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# MULTI-001, per-user data root; unset = legacy layout (byte-identical targets). Only
-# the targets paths.py derives from DATA_ROOT follow the env var here (profile.yaml
-# read path, user.env write path); rendered docs and user_mail.json — like the
-# *.template.* sources — stay at their repo locations.
+# MULTI-001, per-user data root; unset = legacy layout (byte-identical targets). The
+# profile.yaml read path and user.env write path follow paths.py's flattened spots
+# (<DATA_ROOT>/profile.yaml, <DATA_ROOT>/user.env); MULTI-002b: every other rendered
+# file follows the shadow rule below.
 DATA_ROOT = os.environ.get("JOBAPPLY_DATA") or None
+
+
+def shadow(rel):
+    """MULTI-002b: the user's copy of a repo-relative file — <DATA_ROOT>/<rel> when
+    JOBAPPLY_DATA is set, the repo path otherwise (the old single-user layout)."""
+    if DATA_ROOT:
+        return os.path.join(DATA_ROOT, rel)
+    return os.path.join(REPO_ROOT, rel)
+
 DEFAULT_PROFILE = (
     os.path.join(DATA_ROOT, "profile.yaml") if DATA_ROOT
     else os.path.join(REPO_ROOT, "claude_applicator", "profile.yaml")
@@ -60,8 +77,13 @@ TEMPLATE_TARGETS = [
     (".claude/skills/cv-builder/SKILL.template.md", ".claude/skills/cv-builder/SKILL.md"),
 ]
 
-KNOWN_PLACEHOLDERS = ("user_first_name", "user_full_name", "mail_label", "mail_label_slug")
+KNOWN_PLACEHOLDERS = ("user_first_name", "user_full_name", "mail_label", "mail_label_slug",
+                     "run_config_path")
 PLACEHOLDER_RE = re.compile(r"\{\{[^{}]*\}\}")
+# {{ spaced token }} → {{token}} — templates may spell a placeholder either way; the
+# replace loop below matches the spaceless canonical form (all existing templates use
+# it; MULTI-002b's {{run_config_path}} is written to match it too).
+SPACED_TOKEN_RE = re.compile(r"\{\{\s*([A-Za-z0-9_]+)\s*\}\}")
 
 # Tokens allowed to SURVIVE a render: prose in a doc template may legitimately mention a
 # placeholder that belongs to a DIFFERENT templating layer (cv-builder/template.html's
@@ -76,7 +98,7 @@ def render_text(text, values):
     any `{{...}}`-shaped token still present after substitution (should be empty for a
     clean template; a non-empty list means the caller should refuse to write the file).
     """
-    rendered = text
+    rendered = SPACED_TOKEN_RE.sub(r"{{\1}}", text)
     for key in KNOWN_PLACEHOLDERS:
         rendered = rendered.replace("{{" + key + "}}", values[key])
     unknown = sorted(set(PLACEHOLDER_RE.findall(rendered)) - DOC_LITERAL_ALLOWLIST)
@@ -133,6 +155,11 @@ def derive_values(profile):
         "mail_label_slug": mail_label_slug,
         "self_emails": emails,
         "contact_line": contact_line,
+        # MULTI-002b: where the run switches live for THIS render — the user's
+        # run_config.txt under a data root (absolute, so the CLAUDE.md routine reads the
+        # user's switches, not the tracked repo default), the repo-relative name exactly
+        # as before when JOBAPPLY_DATA is unset.
+        "run_config_path": os.path.join(DATA_ROOT, "run_config.txt") if DATA_ROOT else "run_config.txt",
     }
 
 
@@ -141,7 +168,10 @@ def render_templates(values, dry_run):
     results = []
     for tmpl_rel, out_rel in TEMPLATE_TARGETS:
         tmpl_path = os.path.join(REPO_ROOT, tmpl_rel)
-        out_path = os.path.join(REPO_ROOT, out_rel)
+        # MULTI-002b: rendered docs are per-user — shadow(<rel>) under a data root
+        # (bind_user.sh then points the repo path at the user's copy with a symlink),
+        # the repo path exactly as before when JOBAPPLY_DATA is unset.
+        out_path = shadow(out_rel)
         if not os.path.isfile(tmpl_path):
             results.append((tmpl_rel, "MISSING template — skipped"))
             continue
@@ -156,12 +186,16 @@ def render_templates(values, dry_run):
                     ", ".join("{{" + k + "}}" for k in KNOWN_PLACEHOLDERS),
                 )
             )
+        # MULTI-002b: show the real target (the absolute data-root path; legacy keeps
+        # the repo-relative label exactly as before).
+        display = out_path if DATA_ROOT else out_rel
         if dry_run:
-            results.append((tmpl_rel, "would write -> {} ({} bytes)".format(out_rel, len(rendered))))
+            results.append((tmpl_rel, "would write -> {} ({} bytes)".format(display, len(rendered))))
         else:
+            os.makedirs(os.path.dirname(out_path), exist_ok=True)
             with open(out_path, "w", encoding="utf-8") as fh:
                 fh.write(rendered)
-            results.append((tmpl_rel, "wrote -> {}".format(out_rel)))
+            results.append((tmpl_rel, "wrote -> {}".format(display)))
     return results
 
 
@@ -193,14 +227,18 @@ def write_user_env(values, dry_run):
 
 def write_user_mail_json(values, dry_run):
     rel = os.path.join("claude_applicator", "inbox_reader", "user_mail.json")
-    path = os.path.join(REPO_ROOT, rel)
+    # MULTI-002b: per-user like the rendered docs — shadow(<rel>) under a data root
+    # (bind_user.sh symlinks the repo path at it), the repo path exactly as before unset.
+    path = shadow(rel)
     payload = {"self_emails": values["self_emails"], "label": values["mail_label"]}
+    display = path if DATA_ROOT else rel
     if dry_run:
-        return "would write -> {}".format(rel)
+        return "would write -> {}".format(display)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(payload, fh, indent=2)
         fh.write("\n")
-    return "wrote -> {}".format(rel)
+    return "wrote -> {}".format(display)
 
 
 def main():

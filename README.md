@@ -64,3 +64,17 @@ rather drive the mechanics yourself instead of going through the `onboard` skill
 See `claude_applicator/profile.template.yaml` for the full field-by-field schema (or
 `setup/test_profile.yaml` for a fully-filled fictional example), and `claude_applicator/RUN.md`
 for day-to-day operating commands once you're up and running.
+
+## Several people, one Mac (2026-11-25)
+
+The app opens on a login page. Pick your name and enter your password, or "New here?
+Create a user". Everything you then see — profile, CVs, answers, applications, AI keys,
+schedule — is yours alone: it lives in `~/JobApply/users/<name>/`, outside the program.
+The first person to create a user on a Mac that already has a setup from the version
+before logins can bring it over with one checkbox.
+
+The daily schedule is per person: install it from the Schedule page while logged in.
+The password separates people who share this Mac; it does not encrypt files.
+
+For development and tests: starting the server with `JOBAPPLY_DATA` set skips the
+login page and runs the old single-user way against that folder.

@@ -1,0 +1,198 @@
+{# login.html — MULTI-002: the shared-Mac front door. Same calm single-column frame as
+   the onboarding door (wizard-*). Nobody logged in: pick a name, type its password,
+   or create the first/another user — the app then restarts as that user (exit 62 ->
+   run_app.sh's switch loop) and this page polls /health until it's up. Logged in: only
+   "Logged in as <name>." + Log out, the way back here. No framework, no dependencies. #}
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Log in · Job Apply</title>
+<link rel="stylesheet" href="{{ url_for('static', path='style.css') }}?v={{ static_version }}">
+<script>
+(function () {
+  try { if (localStorage.getItem('ja-theme') === 'dark') document.documentElement.setAttribute('data-theme','dark'); } catch (e) {}
+})();
+</script>
+</head>
+<body class="wizard-body">
+<div class="wizard-frame">
+  <header class="wizard-top">
+    <div class="brand"><span class="brand-mark">JA</span>Job Apply</div>
+  </header>
+
+  <main class="wizard-card">
+    <div id="login-view">
+      {% if active %}
+        {# User mode: the only thing this page offers is the way out — Log out switches
+           the app back to this page with the full user picker. #}
+        <div class="wizard-hero">
+          <h1>Who's applying?</h1>
+          <p class="wizard-lede">Logged in as {{ active }}.</p>
+        </div>
+        <form method="post" action="{{ url_for('logout') }}" id="logout-form" class="wizard-nav">
+          <button type="submit" class="btn secondary">Log out</button>
+        </form>
+      {% else %}
+        <div class="wizard-hero">
+          <h1>Who's applying?</h1>
+          <p class="wizard-lede">One Mac, several people: pick a name to open Job Apply
+          as that person. Everyone sees only their own data.</p>
+          {% if legacy %}
+            <p class="note">A setup from an earlier version is on this Mac. It can become this user's.</p>
+          {% endif %}
+        </div>
+
+        <div class="banner bad" id="login-banner" style="display:none;"></div>
+
+        <div class="card">
+          <div class="card-head">Log in</div>
+          {% if users %}
+            <div class="login-users">
+              {% for u in users %}
+                <button type="button" class="btn secondary login-user" data-name="{{ u }}">{{ u }}</button>
+              {% endfor %}
+            </div>
+            <form method="post" action="{{ url_for('login_submit') }}" id="login-form" style="display:none;">
+              <input type="hidden" name="name" id="login-name" value="">
+              <div class="field">
+                <label for="login-password" id="login-password-label">Password</label>
+                <input type="password" name="password" id="login-password" autocomplete="current-password">
+              </div>
+              <div class="wizard-nav">
+                <button type="submit" class="btn">Log in</button>
+              </div>
+            </form>
+          {% else %}
+            <p class="note">No users on this Mac yet — create the first one below.</p>
+          {% endif %}
+        </div>
+
+        <p class="login-toggle"><a href="#" id="toggle-create">New here? Create a user</a></p>
+
+        <div class="card" id="create-section"{% if users %} style="display:none;"{% endif %}>
+          <div class="card-head">Create a user</div>
+          <form method="post" action="{{ url_for('users_new') }}" id="create-form">
+            <div class="field">
+              <label for="new-name">Name</label>
+              <input type="text" name="name" id="new-name" autocomplete="username">
+              <p class="help">3&ndash;24 characters: lowercase letters, numbers, - or _.</p>
+            </div>
+            <div class="field">
+              <label for="new-password">Password</label>
+              <input type="password" name="password" id="new-password" autocomplete="new-password">
+            </div>
+            <div class="field">
+              <label for="new-confirm">Repeat password</label>
+              <input type="password" name="confirm" id="new-confirm" autocomplete="new-password">
+            </div>
+            {% if legacy %}
+              <div class="field login-adopt">
+                <label class="login-check">
+                  <input type="checkbox" name="adopt" value="on">
+                  Bring over the setup already on this Mac
+                </label>
+              </div>
+            {% endif %}
+            <div class="wizard-nav">
+              <button type="submit" class="btn">Create and open</button>
+            </div>
+          </form>
+        </div>
+      {% endif %}
+    </div>
+
+    <div id="login-switching" style="display:none;" class="wizard-hero">
+      <h1>Opening Job Apply…</h1>
+    </div>
+  </main>
+
+  <footer class="wizard-foot">Your data stays on this Mac</footer>
+</div>
+
+<script>
+(function () {
+  var view = document.getElementById('login-view');
+  var switching = document.getElementById('login-switching');
+  var banner = document.getElementById('login-banner');
+  var loginForm = document.getElementById('login-form');
+  var createForm = document.getElementById('create-form');
+  var createSection = document.getElementById('create-section');
+  var logoutForm = document.getElementById('logout-form');
+
+  function showBanner(text) {
+    if (!banner) { return; }
+    banner.textContent = text;
+    banner.style.display = '';
+  }
+
+  function post(form) {
+    return fetch(form.getAttribute('action'), {
+      method: 'POST',
+      body: new FormData(form),
+      credentials: 'same-origin'
+    }).then(function (r) { return r.json(); });
+  }
+
+  // The server restarts itself (switch loop); poll /health until it answers as the
+  // requested user (null after Log out), then land on the app (or back here).
+  function waitFor(user, then) {
+    if (view) { view.style.display = 'none'; }
+    if (switching) { switching.style.display = ''; }
+    var deadline = Date.now() + 15000;
+    (function poll() {
+      if (Date.now() > deadline) {
+        showBanner("Still starting — give it a moment, then reload this page.");
+        return;
+      }
+      fetch('/health').then(function (r) { return r.json(); }).then(function (d) {
+        if (d && d.user === user) { then(); return; }
+        setTimeout(poll, 300);
+      }).catch(function () { setTimeout(poll, 300); });  // server mid-restart
+    })();
+  }
+
+  // A user button reveals that user's password field.
+  Array.prototype.forEach.call(document.querySelectorAll('.login-user'), function (btn) {
+    btn.addEventListener('click', function () {
+      document.getElementById('login-name').value = btn.getAttribute('data-name');
+      document.getElementById('login-password-label').textContent = 'Password for ' + btn.getAttribute('data-name');
+      loginForm.style.display = '';
+      document.getElementById('login-password').focus();
+    });
+  });
+
+  var toggle = document.getElementById('toggle-create');
+  if (toggle) {
+    toggle.addEventListener('click', function (e) {
+      e.preventDefault();
+      createSection.style.display = (createSection.style.display === 'none') ? '' : 'none';
+    });
+  }
+
+  function wire(form, onOk) {
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      if (banner) { banner.style.display = 'none'; }
+      post(form).then(function (d) {
+        if (d && d.ok) { onOk(d); }
+        else { showBanner((d && d.error) || "That didn't work — try again."); }
+      }).catch(function () { showBanner("The app isn't answering — try again."); });
+    });
+  }
+
+  if (loginForm) {
+    wire(loginForm, function (d) { waitFor(d.user, function () { window.location.href = '/'; }); });
+  }
+  if (createForm) {
+    wire(createForm, function (d) { waitFor(d.user, function () { window.location.href = '/'; }); });
+  }
+  // User mode's Log out: back to this page's full picker once the app has restarted.
+  if (logoutForm) {
+    wire(logoutForm, function () { waitFor(null, function () { window.location.href = '/login'; }); });
+  }
+})();
+</script>
+</body>
+</html>

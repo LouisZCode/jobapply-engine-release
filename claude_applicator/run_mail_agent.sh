@@ -17,6 +17,10 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # MULTI-001: per-user data root (heartbeat log, sweep lock, health_status.json).
 # Default = script dir = today's behavior byte-identical when JOBAPPLY_DATA unset.
 DATA_ROOT="${JOBAPPLY_DATA:-$DIR}"
+# MULTI-002b: bind the engine directory to THIS user's files (MAIL_AGENT.md, user_mail.json,
+# tokens, ...) before the agent reads them; fails with a clear message when the user's
+# rendered CLAUDE.md is missing.
+bash "$DIR/bind_user.sh" || exit 1
 LOG_DIR="$DATA_ROOT/output"; mkdir -p "$LOG_DIR"
 HEARTBEAT="$LOG_DIR/launchd_mail.log"
 TS="$(date '+%Y%m%d_%H%M%S')"

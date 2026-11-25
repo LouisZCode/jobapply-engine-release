@@ -175,13 +175,19 @@ EOF
 
 # render_plist TEMPLATE OUT LABEL_PREFIX INSTALL_PATH [RUN_HOUR RUN_MINUTE]
 # Substitutes {{label_prefix}}, {{install_path}}, and — when given — {{run_hour}}/
-# {{run_minute}}. Refuses to write (loudly) if any `{{...}}` placeholder survives the
-# substitution, so a template/script mismatch is never shipped silently.
+# {{run_minute}}. MULTI-002b: also {{label_suffix}} and {{env_block}}, both taken from
+# the environment (JOBAPPLY_USER set → "-<user>" + an EnvironmentVariables block with
+# JOBAPPLY_DATA / JOBAPPLY_USER / JOBAPPLY_CHROME_PROFILE / JOBAPPLY_CDP_PORT — the
+# same env-by-contract the run scripts and .mcp.json use; unset → empty suffix, no
+# block, today's plist). Refuses to write (loudly) if any `{{...}}` placeholder survives
+# the substitution, so a template/script mismatch is never shipped silently.
 render_plist() {
   local tmpl="$1" out="$2" label_prefix="$3" install_path="$4" run_hour="${5:-}" run_minute="${6:-}"
   python3 - "$tmpl" "$out" "$label_prefix" "$install_path" "$run_hour" "$run_minute" <<'PY'
+import os
 import re
 import sys
+from xml.sax.saxutils import escape
 
 tmpl, out, label_prefix, install_path, run_hour, run_minute = sys.argv[1:7]
 with open(tmpl, encoding="utf-8") as fh:
@@ -193,6 +199,33 @@ if run_hour:
     text = text.replace("{{run_hour}}", run_hour)
 if run_minute:
     text = text.replace("{{run_minute}}", run_minute)
+
+# MULTI-002b: per-user schedule.
+user = os.environ.get("JOBAPPLY_USER") or ""
+text = text.replace("{{label_suffix}}", "-" + user if user else "")
+env_block = ""
+if user:
+    values = [
+        ("JOBAPPLY_DATA", os.environ.get("JOBAPPLY_DATA") or ""),
+        ("JOBAPPLY_USER", user),
+        ("JOBAPPLY_CHROME_PROFILE", os.environ.get("JOBAPPLY_CHROME_PROFILE")
+         or os.path.expanduser(
+             "~/Library/Application Support/Google/Chrome-Agent-" + user)),
+        ("JOBAPPLY_CDP_PORT", os.environ.get("JOBAPPLY_CDP_PORT") or "9223"),
+    ]
+    lines = ["  <key>EnvironmentVariables</key>", "  <dict>"]
+    for key, val in values:
+        lines.append("    <key>{}</key>".format(key))
+        lines.append("    <string>{}</string>".format(escape(val)))
+    lines.append("  </dict>")
+    env_block = "\n".join(lines)
+# Whole-line placeholder: with a block the line becomes the block; without one the
+# line disappears entirely (the unset render stays byte-identical to today's plist).
+if env_block:
+    text = text.replace("  {{env_block}}\n", env_block + "\n")
+else:
+    text = text.replace("  {{env_block}}\n", "")
+text = text.replace("{{env_block}}", env_block)
 
 leftover = sorted(set(re.findall(r"\{\{[^{}]*\}\}", text)))
 if leftover:
@@ -224,10 +257,20 @@ cmd_schedule() {
   local gen_dir="$SCRIPT_DIR/generated"
   mkdir -p "$gen_dir"
 
+  # MULTI-002b: per-user schedule — when JOBAPPLY_USER is set the labels (and the
+  # generated file names) carry the user as a suffix and both plists get the
+  # EnvironmentVariables block (rendered by render_plist from the environment).
+  # Unset = today's names, no block.
+  local schedule_user="${JOBAPPLY_USER:-}"
+  local name_suffix=""
+  if [[ -n "$schedule_user" ]]; then
+    name_suffix="-$schedule_user"
+  fi
+
   local health_tmpl="$APP_DIR/jobhealth.plist.template"
   local apply_tmpl="$APP_DIR/jobapply.plist.template"
-  local health_out="$gen_dir/${label_prefix}.jobhealth.plist"
-  local apply_out="$gen_dir/${label_prefix}.jobapply.plist"
+  local health_out="$gen_dir/${label_prefix}.jobhealth${name_suffix}.plist"
+  local apply_out="$gen_dir/${label_prefix}.jobapply${name_suffix}.plist"
 
   for t in "$health_tmpl" "$apply_tmpl"; do
     [[ -f "$t" ]] || { echo "ERROR: missing template $t" >&2; return 1; }
@@ -243,10 +286,10 @@ cmd_schedule() {
   echo "Review both files, then install + load them yourself — this script never runs"
   echo "launchctl or touches ~/Library/LaunchAgents on its own:"
   echo
-  echo "  cp \"$health_out\" ~/Library/LaunchAgents/${label_prefix}.jobhealth.plist"
-  echo "  cp \"$apply_out\" ~/Library/LaunchAgents/${label_prefix}.jobapply.plist"
-  echo "  launchctl load ~/Library/LaunchAgents/${label_prefix}.jobhealth.plist"
-  echo "  launchctl load ~/Library/LaunchAgents/${label_prefix}.jobapply.plist"
+  echo "  cp \"$health_out\" ~/Library/LaunchAgents/$(basename "$health_out")"
+  echo "  cp \"$apply_out\" ~/Library/LaunchAgents/$(basename "$apply_out")"
+  echo "  launchctl load ~/Library/LaunchAgents/$(basename "$health_out")"
+  echo "  launchctl load ~/Library/LaunchAgents/$(basename "$apply_out")"
   echo
   echo "To re-install after an edit: launchctl unload <plist> first, then load again."
   echo

@@ -23,6 +23,14 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # MULTI-001: per-user data root (run logs, costs.csv, health_status.json, run_config.txt).
 # Defaults to this script's dir = today's behavior byte-identical when JOBAPPLY_DATA unset.
 DATA_ROOT="${JOBAPPLY_DATA:-$DIR}"
+# MULTI-002b: bind the engine directory to THIS user's files (repo-relative personal
+# files become symlinks into the data root) before anything below reads one. Exits 1
+# with a clear message when the user's rendered CLAUDE.md is missing — never continue a
+# run that would use another user's (or the repo default's) files.
+bash "$DIR/bind_user.sh" || exit 1
+# Where the worker reads the run switches from: the user's run_config.txt when a data
+# root is set (absolute), the repo-relative file exactly as before when unset.
+RUN_CONFIG_PROMPT="${JOBAPPLY_DATA:+$JOBAPPLY_DATA/}run_config.txt"
 # Cross-checkout guard: the mkdir-lock below can't see across checkouts. When running
 # from anywhere OTHER than production, refuse to start while production's apply lock is
 # held by a live process (a test run overlapping the scheduled prod run = double-apply
@@ -178,6 +186,12 @@ export BASH_DEFAULT_TIMEOUT_MS=300000
 # workers may not edit config/code or mutate the DB beyond SELECT + plain INSERT; denied
 # attempts surface as ISSUE: lines in the run log instead.
 export JOBAPPLY_GUARD=1
+# MULTI-002b: .mcp.json's playwright args expand ${JOBAPPLY_CDP_PORT:-9222} and
+# ${JOBAPPLY_DATA:-.}/output from the worker's environment — make sure both are exported
+# for the claude invocations below (JOBAPPLY_DATA only when actually set: exporting an
+# empty default here would push "user mode" into the child scripts, e.g. bind_user.sh).
+export JOBAPPLY_CDP_PORT="${JOBAPPLY_CDP_PORT:-$PORT}"
+if [[ -n "${JOBAPPLY_DATA:-}" ]]; then export JOBAPPLY_DATA; fi
 # DATA-001: the worker model is defined ONCE here. The `claude -p` invocation below and the
 # DB stamp the worker writes (worker/model columns, CLAUDE.md step 8) both read it, so the
 # recorded model can never drift from what actually ran. Exported env (not a config file)
@@ -261,7 +275,7 @@ if [[ "$STATE" == LOGGED_IN* ]]; then
         (( SLOTS > REMAIN_ROUND )) && SLOTS=$REMAIN_ROUND
       fi
       NDJSON="$LOG_DIR/agent_${TS}_q${Q}_a${ATTEMPT}.ndjson"
-      BASE_PROMPT="SINGLE-QUERY MODE (see the 'Single-query mode' section of CLAUDE.md). This unattended invocation covers ONLY search query #$Q from profile.yaml job_search.search_queries — never any other query. Apply at most $SLOTS times in this invocation (the daily cap is folded into that number, but still run the per-apply DB cap check as the routine requires). Today's shared run log is output/$(basename "$SHARED_RUN_LOG"): read it in preflight and skip on sight anything an earlier invocation already evaluated, then APPEND your own entries to it. Read run_config.txt fresh and obey MODE and RUN_WINDOW_LOCAL. Briefly narrate each decision as you go. Do NOT run db_report.sh (the wrapper runs it once after all queries)."
+      BASE_PROMPT="SINGLE-QUERY MODE (see the 'Single-query mode' section of CLAUDE.md). This unattended invocation covers ONLY search query #$Q from profile.yaml job_search.search_queries — never any other query. Apply at most $SLOTS times in this invocation (the daily cap is folded into that number, but still run the per-apply DB cap check as the routine requires). Today's shared run log is output/$(basename "$SHARED_RUN_LOG"): read it in preflight and skip on sight anything an earlier invocation already evaluated, then APPEND your own entries to it. Read $RUN_CONFIG_PROMPT fresh and obey MODE and RUN_WINDOW_LOCAL. Briefly narrate each decision as you go. Do NOT run db_report.sh (the wrapper runs it once after all queries)."
       if (( ATTEMPT == 1 )); then
         PROMPT="$BASE_PROMPT"
       else

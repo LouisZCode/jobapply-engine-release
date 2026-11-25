@@ -100,7 +100,7 @@
     {% endif %}
     <div class="actions-row">
       <button type="submit" class="btn" {{ 'disabled' if not ready }}>Save &amp; install schedule</button>
-      {% if installed_plists %}<span class="note">Daily schedule is installed on this Mac.</span>{% endif %}
+      {% if installed_plists %}<span class="note">{% if schedule_installed_user %}Daily schedule is installed for {{ schedule_installed_user }}.{% else %}Daily schedule is installed on this Mac.{% endif %}{% if legacy_schedule_installed %} A schedule from the version before logins is still installed; it uses the files from before logins.{% endif %}</span>{% endif %}
     </div>
   </form>
 </div>
