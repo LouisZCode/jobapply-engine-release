@@ -225,13 +225,13 @@ STEP_ORDER = [
 ]
 
 STEP_LABELS = {
-    "profile_saved": "Profile filled in",
-    "rendered": "Engine docs rendered",
-    "answer_bank_created": "Answer bank created",
-    "cv_in_place": "CV in place",
-    "db_initialized": "Database initialized",
-    "linkedin_confirmed": "LinkedIn connected",
-    "claude_connected": "Claude connected",
+    "profile_saved": "Your info filled in",
+    "rendered": "Instructions for the AI prepared from your info",
+    "answer_bank_created": "Answer bank created (your answers, ready to type)",
+    "cv_in_place": "CV in place (a PDF ready to send)",
+    "db_initialized": "Application list initialized",
+    "linkedin_confirmed": "LinkedIn signed in once",
+    "claude_connected": "An AI connected (Claude signed in, or an API key that passed its test)",
     "schedule_installed": "Daily schedule installed",
 }
 
@@ -267,16 +267,27 @@ def readiness():
     resume_rel = (form.get("resume_file") or "").strip()
     resume_ok = bool(resume_rel) and os.path.isfile(os.path.join(paths.ENGINE_DIR, resume_rel))
 
+    # Display order = the path a new user walks (ONBOARD-001, 2026-11-25): AI → your
+    # info → CV → what a run prepares → LinkedIn last. `ready` is still "every item ok".
     items = [
         {
+            # Intelligence gate (Luis, 2026-11-08): a working provider API key that passed
+            # its test replaces the Claude-connection requirement.
+            "key": "claude_connected",
+            "label": STEP_LABELS["claude_connected"],
+            "ok": (bool(st.get("claude_connected")) and claude_cli_path() is not None)
+                  or any((v or {}).get("ok") for v in (st.get("key_test_results") or {}).values()),
+            "page": STEP_LINKS["claude_connected"],
+        },
+        {
             "key": "profile_saved",
-            "label": "Profile complete (contact details, nationality, salary, at least one job search)",
+            "label": "Your info: name, email, salary number and at least one job search",
             "ok": profile_complete,
             "page": STEP_LINKS["profile_saved"],
         },
         {
             "key": "resume_set",
-            "label": "A CV chosen as the default resume",
+            "label": "A CV chosen as the one to send",
             "ok": resume_ok,
             "page": STEP_LINKS["profile_saved"],
         },
@@ -303,15 +314,6 @@ def readiness():
             "label": STEP_LABELS["db_initialized"],
             "ok": db_exists(),
             "page": STEP_LINKS["db_initialized"],
-        },
-        {
-            # Intelligence gate (Luis, 2026-11-08): a working provider API key that passed
-            # its test replaces the Claude-connection requirement.
-            "key": "claude_connected",
-            "label": "A working brain — Claude connected, or an API key that passed its test",
-            "ok": (bool(st.get("claude_connected")) and claude_cli_path() is not None)
-                  or any((v or {}).get("ok") for v in (st.get("key_test_results") or {}).values()),
-            "page": STEP_LINKS["claude_connected"],
         },
         {
             "key": "linkedin_confirmed",

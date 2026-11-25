@@ -286,6 +286,24 @@ h1 + .card, h1 + .option-cards { margin-top: 4px; }
 
 .status-badge.done { background: var(--ok); }
 
+/* Text badges ("✓ Okay", "Needs a fix") and their colours. The circle badge above is an
+   icon; the onboarding rows used .ok / .bad with no rule behind them, so "OK" came out
+   grey (ONBOARD-001, 2026-11-25). */
+.opt { color: var(--muted); font-weight: 400; font-size: 12px; margin-left: 6px; }
+.status-badge.text { width: auto; height: auto; min-width: 22px; border-radius: 999px; padding: 3px 10px; }
+.status-badge.ok { background: var(--ok); }
+.status-badge.warn { background: var(--warn); }
+.status-badge.bad { background: var(--bad); }
+
+/* ---- Onboarding door: two prompts ---- */
+.door-row { display: flex; align-items: flex-start; gap: 14px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+.door-row:last-of-type { border-bottom: none; }
+.door-text { flex: 1; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.door-text p { margin: 0; }
+.door-options { display: flex; flex-direction: column; gap: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; }
+.door-options .btn { margin: 4px 8px 4px 0; }
+.door-cv input[type="file"] { width: auto; flex: 0 1 380px; min-width: 0; }
+
 .checklist-label { flex: 1; }
 
 /* ---- Status line (Connections): ● Connected / ○ Not connected ---- */

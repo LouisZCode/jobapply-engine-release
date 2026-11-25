@@ -17,6 +17,13 @@ PORT="${JOBAPPLY_PORT:-8765}"
 HOST=127.0.0.1
 export JOBAPPLY_PORT="$PORT"
 
+# Tools installed per user must be visible no matter who starts this script. An app opened
+# from Finder/Dock (the JobApply desktop app) and launchd hand us a minimal PATH
+# (/usr/bin:/bin:/usr/sbin:/sbin) — without this line the app cannot find the Claude CLI in
+# ~/.local/bin (its native installer), Homebrew's python3/node/uv, or an Intel Mac's
+# /usr/local/bin. Same line as claude_applicator/run_scheduled.sh.
+export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
+
 if ! command -v python3 >/dev/null 2>&1; then
   echo "ERROR: python3 not found on PATH — install Python 3 first." >&2
   exit 1

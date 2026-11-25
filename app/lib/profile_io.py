@@ -306,21 +306,21 @@ def _zip_lists(form, *names):
     return list(zip(*lists)) if lists and lists[0] else []
 
 
-# Everything a real run needs filled in — the engine used to find "CHANGEME" placeholders
-# in a freshly saved profile (nationality, currency, salary text, no search query at all)
-# and refuse to apply. These are now required at save time and never written as a
-# placeholder; see build_profile() below. One email only: the same address is used for
-# LinkedIn and for external application forms (it should be the one on the LinkedIn account).
+# What a real run cannot do without — required at save time and never written as a
+# placeholder; see build_profile() below. Until 2026-11-25 this also demanded phone, city,
+# country, nationality and currency. ONBOARD-001 (Luis) reduced it to the three a run
+# cannot skip its way past: the name and email every form takes, and the salary number
+# the engine types when a form forces one (an empty one would be written as 0 — the one
+# answer that must never be guessed). The rest stays on the Profile page as optional: the
+# routine already treats a blank as "no answer" and skips-and-logs the field (CLAUDE.md).
+# One email only: the same address is used for LinkedIn and for external application forms
+# (it should be the one on the LinkedIn account).
 REQUIRED_FIELDS = [
     ("full_name", "Full name"),
     ("email", "Email"),
-    ("phone", "Phone"),
-    ("current_city", "Current city"),
-    ("country", "Country"),
-    ("nationality", "Nationality"),
-    ("currency", "Salary currency"),
     ("comp_forced_single_number", "Salary — single number"),
 ]
+OPTIONAL_NOTE = "(optional — some forms ask for it; a job that needs it is skipped until you add it)"
 
 
 def validate(form):

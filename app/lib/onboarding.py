@@ -1,4 +1,6 @@
-"""app/lib/onboarding.py — the first-run wizard behind /onboarding (M2 of the tower).
+"""app/lib/onboarding.py — the onboarding: the two-prompt door at /onboarding
+(ONBOARD-001, 2026-11-25) plus the 9-step wizard it replaced (M2 of the tower), which
+stays reachable, unlinked, at /onboarding/wizard until it is removed.
 
 Design contract (mirrors .claude/skills/onboard/SKILL.md, the chat interview this
 replaces): NEVER invent an answer the user didn't give. Every fact written at the end
@@ -18,7 +20,7 @@ has (claude probe, launchctl, Chrome) — the whole flow is curl-testable.
 import os
 import re
 
-from . import actions, paths, profile_io, state
+from . import actions, keys, paths, profile_io, state
 
 # ------------------------------------------------------------------ step map
 # (key, short title, one-line purpose). Order is the wizard order; the step index
@@ -143,6 +145,78 @@ def prereq_checks():
                       "under your home folder (e.g. ~/GitHub/) before installing the daily schedule.",
         },
     ]
+
+
+# ------------------------------------------------------------------ the door (ONBOARD-001)
+# /onboarding shows two prompts and nothing else: "Do you have these installed?" — we
+# verify each one ourselves (yes → a green "Okay", no → the official download link) — and
+# "Do you have a CV? Upload it now or skip." Home's readiness list guides the rest. The
+# checks are always live; only the visitor's yes/no answers are stored (app_state.json,
+# onboarding_answers) so the page knows which message to show.
+
+DOOR_AI_URL = "https://claude.ai/download"
+
+
+def door_rows():
+    """[{key, label, why, ok, status, url, link, install}] in display order. status:
+    'okay' (verified on this Mac), 'ask' (not found, not answered yet), 'not_found'
+    (visitor said yes, we still can't see it), 'install' (visitor said no)."""
+    answers = state.load_state().get("onboarding_answers") or {}
+    repo = paths.REPO_ROOT
+    home = os.path.expanduser("~")
+    in_tcc_folder = any(
+        repo.startswith(os.path.join(home, p) + os.sep) for p in ("Desktop", "Documents", "Downloads")
+    )
+    rows = [
+        {
+            "key": "chrome",
+            "label": "Google Chrome",
+            "why": "Job Apply opens LinkedIn in your own Chrome.",
+            "ok": state.chrome_installed(),
+            "url": "https://www.google.com/chrome/",
+            "link": "google.com/chrome",
+            "install": "Download it, open it once, then come back and re-check.",
+        },
+        {
+            "key": "ai",
+            "label": "An AI assistant",
+            "why": "Claude is the AI that reads job posts and fills in the forms.",
+            "ok": state.claude_cli_path() is not None,
+            "url": DOOR_AI_URL,
+            "link": "claude.ai/download",
+            "install": "Download Claude, install it, then sign in once inside the app.",
+            "has_key": any(keys.hints()),
+        },
+    ]
+    if in_tcc_folder:
+        # Only when it fails: every packaged install lives in ~/JobApply, so a friend never
+        # sees this row.
+        rows.append({
+            "key": "location",
+            "label": "The app's folder is in a place macOS locks",
+            "why": "macOS blocks background apps from folders on Desktop, Documents and Downloads.",
+            "ok": False,
+            "url": "",
+            "link": "",
+            "install": "Move the JobApply folder somewhere else in your home folder, then re-check.",
+        })
+    for row in rows:
+        answer = answers.get(row["key"])
+        if row["ok"]:
+            row["status"] = "okay"
+        elif answer == "yes":
+            row["status"] = "not_found"
+        elif answer == "no":
+            row["status"] = "install"
+        else:
+            row["status"] = "ask"
+    return rows
+
+
+def ai_key_names():
+    """'Zai (GLM), Codex / OpenAI, OpenRouter' — the API-key providers, for the door's
+    second AI option (comma-joined: a provider label may itself contain a slash)."""
+    return ", ".join(meta["label"] for meta in keys.PROVIDERS.values())
 
 
 # ------------------------------------------------------------------ starter queries

@@ -7,7 +7,7 @@ fix, then re-check.</p>
 <div class="card">
   {% for c in checks %}
   <div class="checklist">
-    <span class="status-badge {{ 'ok' if c.ok else 'bad' }}">{{ 'OK' if c.ok else 'Needs a fix' }}</span>
+    <span class="status-badge text {{ 'ok' if c.ok else 'bad' }}">{{ '✓ Okay' if c.ok else 'Needs a fix' }}</span>
     <div>
       <strong>{{ c.label }}</strong>
       {% if not c.ok %}<p class="note" style="margin:6px 0 0;">{{ c.detail }}</p>{% endif %}

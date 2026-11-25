@@ -11,14 +11,21 @@ records every outcome — so you get real market-response data instead of a manu
 ## Setup
 
 **Prerequisites (one-liner):** macOS, [Claude Code](https://claude.com/claude-code) installed
-and logged in, Python 3, the `sqlite3` CLI, Node.js (for `npx`), and Google Chrome. Check them
+and logged in, Python 3.9 or newer, the `sqlite3` CLI, Node.js (for `npx`), and Google Chrome. Check them
 all at once with:
 
 ```bash
 bash setup/setup.sh --check
 ```
 
-**Onboarding:** open Claude Code in this folder and ask it to set up / onboard (or run
+**Onboarding:** start the app (double-click `JobApply.command`, or open the JobApply desktop
+app). It asks two things at the door — whether you have Chrome and an AI assistant installed
+(it checks itself; if not, it links to the official download) and whether to add your CV now
+— then opens on Home, which lists what's set up and what's missing, each with a link: connect
+an AI → your info (name, email and a salary number are the only required fields, plus what to
+apply for) → CV → the files a run prepares → sign in to LinkedIn once.
+
+**Developer path:** open Claude Code in this folder and ask it to set up / onboard (or run
 `/onboard`). The `onboard` skill drives the whole process conversationally — it interviews
 you, then does the mechanical work itself:
 

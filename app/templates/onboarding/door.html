@@ -1,0 +1,121 @@
+{# onboarding/door.html — the whole onboarding since ONBOARD-001 (2026-11-25): two prompts.
+   "Do you have these installed?" — we verify each one: yes → a green "Okay", no → the
+   official download. "Do you have a CV? Upload it now or skip." Home's readiness list
+   guides everything else. Same calm single-column frame as the wizard it replaces. #}
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Welcome · Job Apply</title>
+<link rel="stylesheet" href="{{ url_for('static', path='style.css') }}?v={{ static_version }}">
+<script>
+(function () {
+  try { if (localStorage.getItem('ja-theme') === 'dark') document.documentElement.setAttribute('data-theme','dark'); } catch (e) {}
+})();
+</script>
+</head>
+<body class="wizard-body">
+<div class="wizard-frame">
+  <header class="wizard-top">
+    <div class="brand"><span class="brand-mark">JA</span>Job Apply</div>
+  </header>
+
+  <main class="wizard-card">
+    <div class="wizard-hero">
+      <h1>A little help applying, every morning.</h1>
+      <p class="wizard-lede">Job Apply searches LinkedIn for roles that fit and fills in the
+      application forms with AI, in your own Chrome. It starts in <strong>prepare
+      mode</strong>: it walks each application to the final button and stops. You press
+      Submit. Your data stays on this Mac.</p>
+    </div>
+
+    {% if cv_banner %}
+      <div class="banner {{ 'ok' if cv_banner_ok else 'bad' }}">{{ cv_banner }}</div>
+    {% endif %}
+
+    <div class="card">
+      <div class="card-head">1 · Do you have these installed?</div>
+
+      {% for r in rows %}
+        <div class="door-row">
+          <span class="status-badge text {{ 'ok' if r.ok else '' }}">{{ '✓ Okay' if r.ok else '?' }}</span>
+          <div class="door-text">
+            <strong>{{ r.label }}</strong>
+            <p class="note door-why">{{ r.why }}</p>
+
+            {% if not r.ok %}
+              {% if r.status == 'ask' %}
+                <form method="post" action="{{ url_for('onboarding_answer') }}" class="wizard-inline-form">
+                  <input type="hidden" name="key" value="{{ r.key }}">
+                  <span>Do you have it?</span>
+                  <button type="submit" class="btn small" name="answer" value="yes">Yes</button>
+                  <button type="submit" class="btn small secondary" name="answer" value="no">No</button>
+                </form>
+              {% else %}
+                {% if r.status == 'not_found' %}
+                  <p class="door-msg">I couldn't find it on this Mac yet. If you just installed it, click Re-check below.</p>
+                {% endif %}
+                {% if r.key == 'ai' %}
+                  {% if r.has_key %}
+                    <p class="door-msg">You've already added an API key. That covers the helpers; applications still need Claude.</p>
+                  {% endif %}
+                  <div class="door-options">
+                    <div>
+                      <strong>Claude</strong> — the AI that fills in applications.<br>
+                      <a class="btn small secondary" href="{{ r.url }}" target="_blank" rel="noopener">Open {{ r.link }} ↗</a>
+                      <span class="note">Install it, then sign in once inside the app.</span>
+                    </div>
+                    <div>
+                      <strong>An API key</strong> ({{ ai_key_names }}) — optional. It helps with reading your CV and
+                      drafting answers. Add it inside the app, under Connections.
+                    </div>
+                  </div>
+                {% else %}
+                  <p class="door-msg">{{ r.install }}</p>
+                  {% if r.url %}
+                    <a class="btn small secondary" href="{{ r.url }}" target="_blank" rel="noopener">Open {{ r.link }} ↗</a>
+                  {% endif %}
+                {% endif %}
+              {% endif %}
+            {% endif %}
+          </div>
+        </div>
+      {% endfor %}
+
+      {% if rows | rejectattr('ok') | list %}
+        <form method="post" action="{{ url_for('onboarding_recheck') }}" style="margin-top:12px;">
+          <button type="submit" class="btn small secondary">Re-check</button>
+        </form>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <div class="card-head">2 · Do you have a CV?</div>
+      {% if cv_pdfs %}
+        <div class="door-row">
+          <span class="status-badge text ok">✓ Okay</span>
+          <div class="door-text">
+            <strong>{{ cv_pdfs | length }} CV{{ '' if cv_pdfs | length == 1 else 's' }} in your library</strong>
+            <p class="note door-why">{{ cv_pdfs | join(', ') }}</p>
+          </div>
+        </div>
+      {% else %}
+        <form method="post" action="{{ url_for('onboarding_cv_upload') }}" enctype="multipart/form-data" class="wizard-inline-form door-cv">
+          <input type="file" name="cv_pdf" accept="application/pdf,.pdf">
+          <button type="submit" class="btn small">Upload it now</button>
+        </form>
+        <p class="note" style="margin:8px 0 0;">A PDF. No CV at hand? Skip it — you can add it later inside the app.</p>
+      {% endif %}
+    </div>
+
+    <form method="post" action="{{ url_for('onboarding_open') }}" class="wizard-nav">
+      <button type="submit" class="btn primary">Open Job Apply →</button>
+    </form>
+    <p class="note" style="text-align:center;">Inside, the Home page lists what's set up and what's missing, with a link for each.</p>
+  </main>
+
+  <footer class="wizard-foot">Your answers stay on this Mac</footer>
+</div>
+</body>
+</html>

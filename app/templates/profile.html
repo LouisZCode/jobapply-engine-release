@@ -160,18 +160,18 @@
         <input type="email" id="email" name="email" value="{{ form.email }}" placeholder="maria@example.com" required>
       </div>
       <div class="field">
-        <label for="phone">Phone<span class="req">*</span></label>
-        <input type="tel" id="phone" name="phone" value="{{ form.phone }}" placeholder="+49 30 1234567" required>
+        <label for="phone">Phone<span class="opt">optional</span></label>
+        <input type="tel" id="phone" name="phone" value="{{ form.phone }}" placeholder="+49 30 1234567">
       </div>
     </div>
     <div class="grid-2">
       <div class="field">
-        <label for="current_city">Current city<span class="req">*</span></label>
-        <input type="text" id="current_city" name="current_city" value="{{ form.current_city }}" placeholder="Musterstadt" required>
+        <label for="current_city">Current city<span class="opt">optional</span></label>
+        <input type="text" id="current_city" name="current_city" value="{{ form.current_city }}" placeholder="Musterstadt">
       </div>
       <div class="field">
-        <label for="country">Country<span class="req">*</span></label>
-        <input type="text" id="country" name="country" value="{{ form.country }}" placeholder="Germany" required>
+        <label for="country">Country<span class="opt">optional</span></label>
+        <input type="text" id="country" name="country" value="{{ form.country }}" placeholder="Germany">
       </div>
     </div>
     <div class="grid-3">
@@ -254,8 +254,8 @@
         {{ tri_select('visa_sponsorship_required', form.visa_sponsorship_required) }}
       </div>
       <div class="field">
-        <label for="nationality">Nationality<span class="req">*</span><span class="info" tabindex="0">ⓘ<span class="tip">A truthful data field (country-list dropdowns, passport fields) — always answered honestly.</span></span></label>
-        <input type="text" id="nationality" name="nationality" value="{{ form.nationality }}" placeholder="e.g. German" required>
+        <label for="nationality">Nationality<span class="opt">optional</span><span class="info" tabindex="0">ⓘ<span class="tip">A truthful data field (country-list dropdowns, passport fields) — always answered honestly.</span></span></label>
+        <input type="text" id="nationality" name="nationality" value="{{ form.nationality }}" placeholder="e.g. German">
       </div>
     </div>
     <div class="grid-2">
@@ -289,8 +289,8 @@
   <div class="card">
     <div class="grid-3">
       <div class="field">
-        <label for="currency">Currency<span class="req">*</span></label>
-        <input type="text" id="currency" name="currency" value="{{ form.currency }}" placeholder="EUR" required>
+        <label for="currency">Currency<span class="opt">optional</span></label>
+        <input type="text" id="currency" name="currency" value="{{ form.currency }}" placeholder="EUR">
       </div>
       <div class="field">
         <label for="comp_forced_single_number">Salary — single number<span class="req">*</span><span class="info" tabindex="0">ⓘ<span class="tip">What gets typed when a form forces one yearly number. Gross, in the currency above.</span></span></label>

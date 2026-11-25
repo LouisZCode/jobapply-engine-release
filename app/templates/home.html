@@ -14,15 +14,15 @@
 
 <div class="option-cards">
   <div class="option-card">
-    <span class="status-badge {{ 'done' if profile_cv_done else '' }}">{{ '✓' if profile_cv_done else '' }}</span>
-    <h2>Your profile &amp; CV</h2>
-    <a class="btn {{ 'secondary' if profile_cv_done else '' }}" href="{{ profile_cv_href }}">{{ profile_cv_label }}</a>
-  </div>
-
-  <div class="option-card">
     <span class="status-badge {{ 'done' if status.claude_connected else '' }}">{{ '✓' if status.claude_connected else '' }}</span>
     <h2>Connect an AI</h2>
     <a class="btn {{ 'secondary' if status.claude_connected else '' }}" href="{{ claude_href }}">{{ claude_label }}</a>
+  </div>
+
+  <div class="option-card">
+    <span class="status-badge {{ 'done' if profile_cv_done else '' }}">{{ '✓' if profile_cv_done else '' }}</span>
+    <h2>Your profile &amp; CV</h2>
+    <a class="btn {{ 'secondary' if profile_cv_done else '' }}" href="{{ profile_cv_href }}">{{ profile_cv_label }}</a>
   </div>
 
   <div class="option-card">

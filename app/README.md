@@ -16,7 +16,7 @@ files are created automatically and silently the first time the app starts (see
 
 **Start it:** double-click `JobApply.command` at the repo root, or run
 `bash app/run_app.sh` from anywhere. First run creates `app/.venv` and installs
-`fastapi` + `uvicorn` + `jinja2` + `python-multipart` + `pyyaml` into it.
+the pinned runtime from `app/requirements.txt` into it (Python 3.9 or newer).
 
 **Where it lives:** `http://127.0.0.1:8765`, bound to localhost only.
 

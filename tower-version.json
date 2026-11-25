@@ -1,6 +1,6 @@
 {
   "version": "0.1.0",
-  "notes": "Packaging test release",
-  "engine": "19191180c3c8d2a4d6679048c23f8d2a338ee7b4",
-  "date": "2026-11-25T15:35:12Z"
+  "notes": "Onboarding v2: two prompts at the door; Home guides the rest. Finds the Claude CLI when opened from the desktop app.",
+  "engine": "6a432ca7f8eb7de2d53414a335f6d5384503df0e",
+  "date": "2026-11-25T16:09:58Z"
 }

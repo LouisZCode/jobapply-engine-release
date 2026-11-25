@@ -252,10 +252,11 @@ async def health():
 
 @app.get("/")
 async def home(request: Request):
-    # Fresh install: no profile yet, wizard never finished AND not dismissed —
-    # start at the wizard instead of a mostly-empty home (PRODUCT_INVENTORY §H:
-    # the setup app IS the onboarding). "Not now" sets onboarding_dismissed and
-    # lands here for real.
+    # Fresh install: no profile yet, the door was never finished AND not dismissed —
+    # start at the door (two prompts, ONBOARD-001 2026-11-25) instead of a mostly-empty
+    # home. "Open Job Apply" / "Not now" set a flag and land here for good; Home's
+    # readiness list then guides the rest (PRODUCT_INVENTORY §H: the setup app IS the
+    # onboarding).
     if (
         not state.profile_exists()
         and not state.load_state().get("onboarding_finished")
@@ -314,11 +315,17 @@ async def jobs_stop(request: Request):
 
 
 # ------------------------------------------------------------------------------
-# ONBOARDING — the first-run wizard (M2). One route per screen action; all state
-# lives in app_state.json's onboarding_* keys (see lib/onboarding.py) and all real
-# writes go through the SAME functions the regular pages use (profile_io, actions,
-# setup.sh) — the wizard is a UX layer, never a second write path. A fresh install
-# (no profile.yaml, wizard not finished) gets Home redirected here automatically.
+# ONBOARDING — the door (ONBOARD-001, 2026-11-25): /onboarding is two prompts, nothing
+# else — "Do you have these installed?" (verified live by onboarding.door_rows: yes →
+# green "Okay", no → the official download link) and "Do you have a CV? Upload it now or
+# skip." Everything else is guided from Home's readiness list. A fresh install (no
+# profile.yaml, door never finished) gets Home redirected here once.
+#
+# The 9-step wizard it replaced (M2) keeps its routes below, reachable only at
+# /onboarding/wizard and unlinked, until it is removed. All state lives in
+# app_state.json's onboarding_* keys (see lib/onboarding.py) and all real writes go
+# through the SAME functions the regular pages use (profile_io, actions, setup.sh) —
+# onboarding is a UX layer, never a second write path.
 # ------------------------------------------------------------------------------
 
 _GMAIL_CONNECT_LOG = os.path.join(paths.JOBS_DIR, "gmail_connect.log")
@@ -359,6 +366,46 @@ def _wizard_draft():
 
 @app.get("/onboarding")
 async def onboarding_page(request: Request):
+    # The door. Entering it revokes a previous "Not now" dismissal.
+    if state.load_state().get("onboarding_dismissed"):
+        state.update_state(onboarding_dismissed=False)
+    flashed = flash_pop("onboarding")
+    return templates.TemplateResponse(request, "onboarding/door.html", {
+        "rows": onboarding.door_rows(),
+        "ai_key_names": onboarding.ai_key_names(),
+        "cv_pdfs": state.cv_pdfs(),
+        "cv_banner": flashed.get("cv_banner"),
+        "cv_banner_ok": bool(flashed.get("cv_ok")),
+    })
+
+
+@app.post("/onboarding/answer")
+async def onboarding_answer(request: Request):
+    """Yes / No on an installed-check row. The next view re-runs the live check: found →
+    green "Okay"; said yes but not found → says so; said no → shows the download link."""
+    form = await request.form()
+    key = (form.get("key") or "").strip()
+    answer = (form.get("answer") or "").strip()
+    if key not in {row["key"] for row in onboarding.door_rows()} or answer not in ("yes", "no"):
+        return redirect("onboarding_page")
+    answers = dict(state.load_state().get("onboarding_answers") or {})
+    answers[key] = answer
+    state.update_state(onboarding_answers=answers)
+    activity.log_event("onboarding", door=key, answer=answer)
+    return redirect("onboarding_page")
+
+
+@app.post("/onboarding/open")
+async def onboarding_open():
+    """"Open Job Apply": the door is done for good — Home guides the rest."""
+    state.update_state(onboarding_finished=True)
+    activity.log_event("onboarding", event="door_opened")
+    return redirect("home")
+
+
+@app.get("/onboarding/wizard")
+async def onboarding_wizard(request: Request):
+    # Retired as the entry point 2026-11-25 (ONBOARD-001); unlinked, kept until removed.
     # Entering the wizard revokes a previous "Not now" dismissal.
     if state.load_state().get("onboarding_dismissed"):
         state.update_state(onboarding_dismissed=False)
@@ -424,7 +471,7 @@ async def onboarding_step(request: Request):
     form = await request.form()
     current = (form.get("step") or "").strip()
     if current not in onboarding.STEP_KEYS:
-        return redirect("onboarding_page")
+        return redirect("onboarding_wizard")
     index = onboarding.STEP_KEYS.index(current)
 
     draft = _wizard_draft()
@@ -439,11 +486,13 @@ async def onboarding_step(request: Request):
     if onboarding.STEP_KEYS[next_index] == "finish" and state.profile_exists():
         # Returning to a finished setup — land on the finished view directly.
         pass
-    return redirect("onboarding_page")
+    return redirect("onboarding_wizard")
 
 
 @app.post("/onboarding/prereqs/recheck")
 async def onboarding_recheck(request: Request):
+    # Shared by the door ("Re-check" after installing) and the retired wizard's prereq
+    # page; both checks are live, so a reload is all a re-check needs.
     return redirect("onboarding_page")
 
 
@@ -454,13 +503,13 @@ async def onboarding_claude_probe(request: Request):
     msg = (result.get("stdout") or result.get("stderr") or result.get("message") or "").strip()
     state.update_state(claude_connected=bool(result["ok"]), claude_probe_message=msg, claude_probe_checked_at=now)
     activity.log_event("onboarding", step="claude", event="probe", ok=bool(result["ok"]))
-    return redirect("onboarding_page")
+    return redirect("onboarding_wizard")
 
 
 @app.post("/onboarding/claude/terminal")
 async def onboarding_claude_terminal(request: Request):
     actions.open_terminal_for_claude_login()
-    return redirect("onboarding_page")
+    return redirect("onboarding_wizard")
 
 
 @app.post("/onboarding/search/generate")
@@ -482,7 +531,7 @@ async def onboarding_search_generate(request: Request):
         fields["_roles_location"] = location
         onboarding.save_draft(fields=fields, lists=lists)
         activity.log_event("onboarding", step="search", event="generated", rows=len(rows))
-    return redirect("onboarding_page")
+    return redirect("onboarding_wizard")
 
 
 @app.post("/onboarding/cv")
@@ -490,8 +539,8 @@ async def onboarding_cv_upload(request: Request):
     form = await request.form()
     upload = await _save_cv_upload(form.get("cv_pdf"))
     activity.log_event("onboarding", step="search", event="cv_upload", ok=upload["ok"])
-    flash("onboarding", cv_banner=upload["message"])
-    return redirect("onboarding_page")
+    flash("onboarding", cv_banner=upload["message"], cv_ok=upload["ok"])
+    return redirect("onboarding_wizard")
 
 
 @app.post("/onboarding/story/from-cv")
@@ -500,7 +549,7 @@ async def onboarding_story_from_cv(request: Request):
     filename = (form.get("cv_filename") or "").strip()
     if filename not in state.cv_pdfs():
         flash("onboarding", cv_banner="That file isn't in the CV pool anymore — refresh and try again.")
-        return redirect("onboarding_page")
+        return redirect("onboarding_wizard")
     try:
         from pypdf import PdfReader
         pdf_path = os.path.join(paths.CV_DATA_DIR, filename)
@@ -515,14 +564,14 @@ async def onboarding_story_from_cv(request: Request):
         onboarding.save_draft(background=combined)
         flash("onboarding", cv_banner="Added text from {} — read it through below.".format(filename))
     activity.log_event("onboarding", step="story", event="from_cv", filename=filename)
-    return redirect("onboarding_page")
+    return redirect("onboarding_wizard")
 
 
 @app.post("/onboarding/linkedin/launch")
 async def onboarding_linkedin_launch(request: Request):
     result = actions.launch_linkedin_chrome()
     activity.log_event("onboarding", step="connect", event="linkedin_launch", ok=bool(result.get("ok")))
-    return redirect("onboarding_page")
+    return redirect("onboarding_wizard")
 
 
 @app.post("/onboarding/gmail/credentials")
@@ -550,13 +599,13 @@ async def onboarding_gmail_credentials(request: Request):
                 fh.write(data)
             activity.log_event("onboarding", step="connect", event="gmail_credentials_added")
             flash("onboarding", cv_banner="Key file added — you can connect Gmail now.")
-    return redirect("onboarding_page")
+    return redirect("onboarding_wizard")
 
 
 @app.post("/onboarding/gmail/connect")
 async def onboarding_gmail_connect(request: Request):
     if _gmail_proc["proc"] is not None and _gmail_proc["proc"].poll() is None:
-        return redirect("onboarding_page")
+        return redirect("onboarding_wizard")
     os.makedirs(paths.JOBS_DIR, exist_ok=True)
     fh = open(_GMAIL_CONNECT_LOG, "w", encoding="utf-8")
     import subprocess as _sp
@@ -569,7 +618,7 @@ async def onboarding_gmail_connect(request: Request):
     )
     fh.close()
     activity.log_event("onboarding", step="connect", event="gmail_connect_started")
-    return redirect("onboarding_page")
+    return redirect("onboarding_wizard")
 
 
 @app.get("/onboarding/gmail/status")
@@ -618,7 +667,7 @@ async def onboarding_finish(request: Request):
         onboarding.save_draft(step=onboarding.STEP_KEYS.index("search"))
         activity.log_event("onboarding", step="finish", event="assemble_failed", errors=len(errors))
 
-    return redirect("onboarding_page")
+    return redirect("onboarding_wizard")
 
 
 # ------------------------------------------------------------------------------
