@@ -606,6 +606,14 @@ and report to the user. Do **not** run the routine again until the user confirms
       - **`cv_file`** → the CV filename you uploaded (the file named in the active entry's `resume`, e.g. `<Name>_<Role>_CV.pdf`), chosen by the
         CV-selection rule (step 3: title override `cv_by_title`, else the active query's `resume`). A
         dedicated column — keep logging *why* in the run log, but the filename goes here.
+      - **`worker` / `model`** → which AI ran this application, stamped from the environment (never
+        from what you think or say you are): run ONE Bash `echo "$JOBAPPLY_WORKER|$JOBAPPLY_WORKER_MODEL"`
+        and put the two values verbatim into the `worker` and `model` columns. NEVER guess or
+        hardcode them — the launching wrapper exports exactly what is running, so the stamp can
+        never differ from it.
+      - **`ats_host`** → registrable domain (last two labels, or three when the second-level domain
+        is a public suffix like co.uk) of the host the form was submitted on (e.g. `greenhouse.io`);
+        NULL for LinkedIn Easy Apply.
       - **`relevance`** → always `pass`. Only gate-passing jobs ever reach this INSERT (a FAIL/SKIP
         never writes the DB — see step 4.3), so every row you write is a pass by construction.
       - **`relevance_reason`** → ONE line on why the gate passed — the decisive signals from the

@@ -27,7 +27,10 @@ CREATE TABLE IF NOT EXISTS applications (
     apply_email       TEXT,                          -- inbox used for THIS application: identity.email (Easy Apply / LinkedIn-native) | identity.email_external (external ATS). See routing in profile.yaml identity.
     cv_file           TEXT,                          -- CV filename uploaded for this application (e.g. CandidateName_RoleFamily_2026.pdf); chosen by cv_by_title / query default (CLAUDE.md step 3)
     outcome           TEXT,                          -- F-4 DERIVED market-response rollup (recomputed from application_events, never hand-set): no_response|acknowledged|assessment|invited|interviewing|rejected|offer|withdrawn. NULL on non-applied rows.
-    outcome_at        TEXT                           -- when `outcome` last changed (UTC 'YYYY-MM-DD HH:MM:SS')
+    outcome_at        TEXT,                          -- when `outcome` last changed (UTC 'YYYY-MM-DD HH:MM:SS')
+    worker            TEXT,                          -- harness that ran this application (claude | pi | codex), stamped from the environment, never from what the model says it is
+    model             TEXT,                          -- model that ran it (e.g. claude-sonnet-5), same source
+    ats_host          TEXT                           -- registrable domain of the host the form was submitted on (e.g. greenhouse.io); NULL for LinkedIn Easy Apply
 );
 
 -- F-4 outcome tracking: one row per real-world touch on an application (email or human-reported).

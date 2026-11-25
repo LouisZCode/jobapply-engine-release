@@ -178,6 +178,13 @@ export BASH_DEFAULT_TIMEOUT_MS=300000
 # workers may not edit config/code or mutate the DB beyond SELECT + plain INSERT; denied
 # attempts surface as ISSUE: lines in the run log instead.
 export JOBAPPLY_GUARD=1
+# DATA-001: the worker model is defined ONCE here. The `claude -p` invocation below and the
+# DB stamp the worker writes (worker/model columns, CLAUDE.md step 8) both read it, so the
+# recorded model can never drift from what actually ran. Exported env (not a config file)
+# because the sqlite MCP server inherits the environment (.mcp.json has no env block).
+WORKER_MODEL=claude-sonnet-5
+export JOBAPPLY_WORKER=claude
+export JOBAPPLY_WORKER_MODEL="$WORKER_MODEL"
 RC=0
 SUMMARY=""
 if [[ "$STATE" == LOGGED_IN* ]]; then
@@ -262,7 +269,7 @@ if [[ "$STATE" == LOGGED_IN* ]]; then
       fi
       echo "[3] query #$Q/$QUERY_COUNT attempt $ATTEMPT (cap $USED/$DAILY_CAP used; up to $SLOTS) — trace=$(basename "$NDJSON")"
       "$HOME/.local/bin/claude" -p "$PROMPT" \
-        --model claude-sonnet-5 \
+        --model "$WORKER_MODEL" \
         --max-turns 250 \
         --output-format stream-json --verbose \
         --dangerously-skip-permissions </dev/null >"$NDJSON"

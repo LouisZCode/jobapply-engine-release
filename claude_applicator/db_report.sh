@@ -38,6 +38,15 @@ HAS_OUTCOMES="$(sqlite3 "$DB" "SELECT COUNT(*) FROM sqlite_master WHERE type='ta
             COUNT(*) AS n
      FROM applications GROUP BY cv, email ORDER BY n DESC;"
   echo
+  echo "-- by AI and application system (all time) --"
+  sqlite3 -column -header "$DB" \
+    "SELECT COALESCE(worker,'(none)') AS worker, COALESCE(model,'(none)') AS model, COUNT(*) AS n
+     FROM applications GROUP BY worker, model ORDER BY n DESC;"
+  echo
+  sqlite3 -column -header "$DB" \
+    "SELECT COALESCE(ats_host,'(none)') AS ats_host, COUNT(*) AS n
+     FROM applications GROUP BY ats_host ORDER BY n DESC;"
+  echo
   echo "================= OUTCOME / MARKET RESPONSE  (F-4) ================="
   if [ "$HAS_OUTCOMES" = "1" ]; then
     echo "(outcome is DERIVED from application_events, never hand-set; status stays the pipeline fact)"

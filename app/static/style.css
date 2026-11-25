@@ -682,6 +682,17 @@ code.inline {
 }
 
 .data-table tbody tr:last-child td { border-bottom: none; }
+/* DATA-001: the applications list has eight columns. Fixed column widths (colgroup in the
+   template), and every long value has a natural second line (time, inbox domain, model id),
+   so the table fits its card at every window width — no horizontal scroll. */
+.data-table--fit { table-layout: fixed; min-width: 770px; }  /* below this the card scrolls */
+.data-table--fit th, .data-table--fit td { padding: 10px 6px; white-space: normal; overflow-wrap: break-word; }
+.data-table--fit td.outcome-cell, .data-table--fit td.system-cell { font-size: 13px; }
+.data-table--fit th { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.data-table--fit td:nth-child(4), .data-table--fit td.ai-cell { white-space: nowrap; }
+.ai-model, .cell-sub { display: block; overflow-wrap: anywhere; }
+.ai-model { color: var(--muted); font-size: 11px; }
+.cell-sub { color: var(--muted); }
 .data-table tbody tr:hover { background: var(--panel-2); }
 
 .stat { font-size: 26px; font-weight: 700; margin: 0; letter-spacing: -0.01em; }

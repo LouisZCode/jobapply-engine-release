@@ -28,3 +28,19 @@ on the home page if it fails.
 **State:** `app/app_state.json` (gitignored) — which setup steps are done, plus the
 last schedule/probe settings. Never holds passwords; the app re-derives most status
 from the real filesystem/PATH, not from this file.
+
+## Tests (dev-only — `app/tests/`, excluded from the release)
+
+The app resolves every per-user path at import time (`lib/paths.py` reads `JOBAPPLY_DATA`
+once), so the tests give each test a fresh data root and re-import the app:
+`app/tests/conftest.py` does that; test functions import `server` / `lib` inside the test.
+
+```
+python3 -m venv app/.venv
+app/.venv/bin/pip install -r app/requirements.txt pytest httpx   # pytest + httpx are dev-only
+app/.venv/bin/python3 -m pytest app/tests -q
+```
+
+`app/lib/dbschema.py` adds any column the app expects but an older database lacks
+(`EXPECTED`), at server start, right after the database is created. Add new columns to
+`schema.sql` AND to `EXPECTED`, and extend `app/tests/test_dbschema.py`.

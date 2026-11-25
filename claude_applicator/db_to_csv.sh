@@ -22,7 +22,7 @@ OUT_EVENTS="${JOBAPPLY_DATA:-$DIR/..}/application_events.csv"
 # Big free-text columns (job_description) go last so the useful columns are readable up front.
 sqlite3 -header -csv "$DB" \
   "SELECT job_id, status, outcome, outcome_at, title, company, location, applied_at,
-          posted_at, apply_email, cv_file, relevance, relevance_reason, url,
+          posted_at, apply_email, cv_file, worker, model, ats_host, relevance, relevance_reason, url,
           extra_questions, notes, first_seen, status_updated_at, job_description
    FROM applications
    ORDER BY status_updated_at DESC;" > "$OUT_APPS"

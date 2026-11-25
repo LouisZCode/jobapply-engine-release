@@ -70,6 +70,13 @@ trap 'rm -rf "$LOCKDIR"' EXIT
 export PATH="$HOME/.local/bin:/opt/homebrew/bin:$PATH"
 export BASH_DEFAULT_TIMEOUT_MS=300000
 export JOBAPPLY_GUARD=1
+# DATA-001 (same as run_scheduled.sh STEP 3): the model is defined ONCE here, used in the
+# invocation below and exported as the DB stamp source (worker/model columns, CLAUDE.md
+# step 8) — the stamp can never differ from what ran. The sqlite MCP server inherits it
+# (.mcp.json has no env block).
+WORKER_MODEL=claude-sonnet-5
+export JOBAPPLY_WORKER=claude
+export JOBAPPLY_WORKER_MODEL="$WORKER_MODEL"
 
 cd "$DIR" || { echo "cannot cd to $DIR — aborting"; exit 1; }
 
@@ -83,7 +90,7 @@ fi
 
 echo "[1] launching worker — trace=$(basename "$NDJSON")"
 "$HOME/.local/bin/claude" -p "$PROMPT" \
-  --model claude-sonnet-5 \
+  --model "$WORKER_MODEL" \
   --max-turns 100 \
   --output-format stream-json --verbose \
   --dangerously-skip-permissions </dev/null >"$NDJSON"

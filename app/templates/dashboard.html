@@ -60,7 +60,11 @@
 
   {% if rows %}
     <div class="card" style="overflow-x:auto; padding:0;">
-      <table class="data-table">
+      <table class="data-table data-table--fit">
+        <colgroup>
+          <col style="width:12%"><col style="width:10%"><col style="width:14%"><col style="width:9%">
+          <col style="width:13%"><col style="width:14%"><col style="width:14%"><col style="width:14%">
+        </colgroup>
         <thead>
           <tr>
             <th>Date</th>
@@ -69,17 +73,21 @@
             <th>Status</th>
             <th>Outcome</th>
             <th>Channel</th>
+            <th>AI</th>
+            <th>System</th>
           </tr>
         </thead>
         <tbody>
           {% for row in rows %}
             <tr>
-              <td>{{ row.applied_at or row.status_updated_at }}</td>
+              <td>{{ row.ts_date }}{% if row.ts_time %}<span class="cell-sub">{{ row.ts_time }}</span>{% endif %}</td>
               <td>{{ row.company or '' }}</td>
               <td>{{ row.title or '' }}</td>
               <td>{{ row.status or '' }}</td>
-              <td>{{ row.outcome or '' }}</td>
-              <td>{{ row.apply_email or '' }}</td>
+              <td class="outcome-cell">{{ row.outcome or '' }}</td>
+              <td>{{ row.email_local }}{% if row.email_domain %}<span class="cell-sub">{{ row.email_domain }}</span>{% endif %}</td>
+              <td class="ai-cell">{% if row.worker %}{{ row.worker }}{% if row.model %}<span class="ai-model">{{ row.model }}</span>{% endif %}{% endif %}</td>
+              <td class="system-cell">{{ row.system or '' }}</td>
             </tr>
           {% endfor %}
         </tbody>

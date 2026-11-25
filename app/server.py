@@ -40,7 +40,7 @@ from fastapi.staticfiles import StaticFiles  # noqa: E402
 from fastapi.templating import Jinja2Templates  # noqa: E402
 
 from lib import actions, activity, jobs, llm, onboarding, paths, profile_io, state, usage  # noqa: E402
-from lib import keys as key_store  # noqa: E402
+from lib import dbschema, keys as key_store  # noqa: E402
 
 # Auto-setup: the database used to need a manual "Initialize" button on the home page.
 # It's now created silently the first time the app starts, if it isn't there yet — see
@@ -63,6 +63,10 @@ async def lifespan(app: FastAPI):
                     (result.get("stderr") or result.get("message") or "unknown error").strip()
                 )
             )
+    # DATA-001: DBs created before the worker/model/ats_host columns existed get them
+    # added here (idempotent ALTER TABLE ADD COLUMN; a fresh DB from schema.sql already
+    # has them, so this is a no-op and adds nothing).
+    dbschema.ensure_columns(paths.APPLICATIONS_DB)
     yield
 
 
@@ -1368,9 +1372,28 @@ def _dashboard_rows():
     try:
         cur = con.execute(
             "SELECT job_id, company, title, status, outcome, apply_email, applied_at, "
-            "status_updated_at FROM applications ORDER BY status_updated_at DESC LIMIT 50"
+            "status_updated_at, worker, model, "
+            # A stamped row without a host is an Easy Apply; a row from before stamping
+            # (worker empty) shows nothing — its system is unknown, not LinkedIn.
+            "CASE WHEN COALESCE(ats_host, '') != '' THEN ats_host "
+            "     WHEN COALESCE(worker, '') != '' THEN 'LinkedIn' "
+            "     ELSE '' END AS system "
+            "FROM applications ORDER BY status_updated_at DESC LIMIT 50"
         )
         rows = [dict(r) for r in cur.fetchall()]
+        for r in rows:
+            # Display helpers for the eight-column list (DATA-001): each long value gets a
+            # natural second line, so the table never needs a horizontal scroll.
+            ts = r.get("applied_at") or r.get("status_updated_at") or ""
+            r["ts_date"], r["ts_time"] = ts[:10], ts[11:19]
+            local, _, domain = (r.get("apply_email") or "").partition("@")
+            # Wrap points (zero-width spaces): a long value breaks after a dot, a slash or an
+            # underscore when — and only when — its column is too narrow; never mid-word.
+            r["email_local"] = local.replace(".", ".\u200b") + ("@" if domain else "")
+            r["email_domain"] = domain
+            r["system"] = (r.get("system") or "").replace(".", ".\u200b")
+            r["outcome"] = (r.get("outcome") or "").replace("_", "_\u200b")
+            r["model"] = (r.get("model") or "").replace("/", "/\u200b")
         total = con.execute("SELECT COUNT(*) FROM applications").fetchone()[0]
         this_week = con.execute(
             "SELECT COUNT(*) FROM applications WHERE "
