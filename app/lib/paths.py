@@ -29,6 +29,14 @@ def shadow(rel):
         return os.path.join(DATA_ROOT, rel)
     return os.path.join(REPO_ROOT, rel)
 
+
+def engine_file(rel):
+    """A per-user file the engine keeps at the ROOT of the data area (CV pool `data/…`,
+    run traces `output/…`): <DATA_ROOT>/<rel> for a user, <ENGINE_DIR>/<rel> otherwise.
+    shadow() is for files that keep their repo-relative path; this is for the flattened
+    set (see users.adopt_legacy and claude_applicator/bind_user.sh)."""
+    return os.path.join(DATA_ROOT or ENGINE_DIR, rel)
+
 PROFILE_TEMPLATE = os.path.join(ENGINE_DIR, "profile.template.yaml")
 PROFILE_YAML = os.path.join(ENGINE_DIR, "profile.yaml")
 USER_ENV = os.path.join(ENGINE_DIR, "user.env")

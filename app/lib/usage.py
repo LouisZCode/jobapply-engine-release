@@ -85,8 +85,8 @@ def _result_record(path):
 def _trace_paths():
     patterns = [
         os.path.join(paths.JOBS_DIR, "*.ndjson"),
-        os.path.join(paths.ENGINE_DIR, "output", "agent_*.ndjson"),
-        os.path.join(paths.ENGINE_DIR, "output", "mail_agent_run_*.ndjson"),
+        paths.engine_file("output/agent_*.ndjson"),
+        paths.engine_file("output/mail_agent_run_*.ndjson"),
     ]
     found = []
     for pattern in patterns:

@@ -310,7 +310,7 @@ def readiness():
         for q in form.get("search_queries") or []
     )
     resume_rel = (form.get("resume_file") or "").strip()
-    resume_ok = bool(resume_rel) and os.path.isfile(os.path.join(paths.ENGINE_DIR, resume_rel))
+    resume_ok = bool(resume_rel) and os.path.isfile(paths.engine_file(resume_rel))
 
     # Display order = the path a new user walks (ONBOARD-001, 2026-11-25): AI → your
     # info → CV → what a run prepares → LinkedIn last. `ready` is still "every item ok".

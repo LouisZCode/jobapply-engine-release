@@ -344,7 +344,7 @@ def default_resume_path(existing=None, cv_pool=None):
     """The resume path a profile falls back to: keep a saved one that still exists, else
     the newest PDF in the CV pool (uploaded or generated), else '' — never a placeholder."""
     current = ((existing or {}).get("resume_file") or "").strip()
-    if current and "CHANGEME" not in current and os.path.isfile(os.path.join(paths.ENGINE_DIR, current)):
+    if current and "CHANGEME" not in current and os.path.isfile(paths.engine_file(current)):
         return current
     pool = list(cv_pool or [])
     if pool:

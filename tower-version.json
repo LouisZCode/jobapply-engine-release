@@ -1,6 +1,6 @@
 {
   "version": "0.1.0",
-  "notes": "Login page: several people, one Mac, each with their own data (MULTI-002). Engine runs are per user.",
-  "engine": "d9f81c2cb6ff91dc763e2cffdbdaef0396d90b8b",
-  "date": "2026-11-25T23:22:50Z"
+  "notes": "Chosen CV and AI usage are found for each user before the first run.",
+  "engine": "5778dad8c9d868f8c8933f87a90d97d2c69616b5",
+  "date": "2026-11-25T23:28:23Z"
 }

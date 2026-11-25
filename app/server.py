@@ -899,7 +899,7 @@ def _adopt_default_resume(filename):
     if profile is None:
         return
     current = (profile.get("resume_file") or "").strip()
-    if current and "CHANGEME" not in current and os.path.isfile(os.path.join(paths.ENGINE_DIR, current)):
+    if current and "CHANGEME" not in current and os.path.isfile(paths.engine_file(current)):
         return
     resume_path = "data/{}".format(filename)
     profile["resume_file"] = resume_path
