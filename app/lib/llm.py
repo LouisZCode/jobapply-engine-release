@@ -158,7 +158,9 @@ def set_application_brain(brain_id, model):
     model = (model or "").strip()
     option = next((o for o in application_options() if o["id"] == brain_id), None)
     if option is None:
-        raise ValueError("Pick one of the options above.")
+        # BRAIN-001c: names the options so the message tells the user what to do.
+        raise ValueError("Pick an AI above first (Z.ai, OpenRouter, OpenAI or Claude), "
+                         "then press Save.")
     if not option["available"]:
         raise ValueError("{} isn't available right now — {}".format(option["label"], option["why_not"]))
     if not model:

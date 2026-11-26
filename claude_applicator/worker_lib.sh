@@ -22,6 +22,8 @@
 #                           own `</dev/null >"$NDJSON"` redirections and `RC=$?` reads).
 #                           rc=64 = launch REFUSED — the stderr line says why (unknown
 #                           WORKER, or pi without WORKER_MODEL); treat it as a failed run.
+#                           Before building the argv it calls _load_user_keys() below, so
+#                           every launch (both branches) inherits the user's stored keys.
 #
 # Both branches stamp what ACTUALLY ran by exporting JOBAPPLY_WORKER/JOBAPPLY_WORKER_MODEL
 # (the routine echoes them into the applications.worker/model columns; the model must
@@ -84,6 +86,92 @@ worker_model() {
   printf '%s\n' "${m:-$1}"
 }
 
+# BRAIN-001c: put the user's stored API keys into this shell's environment, so whatever
+# invoke_worker launches inherits them (pi's built-in providers read ZAI_API_KEY,
+# ZAI_CODING_CN_API_KEY, OPENAI_API_KEY, OPENROUTER_API_KEY). The tower's one-time
+# spawn injection only ever saw the old single-user file — a key saved after the app
+# started, or any per-user key, never reached the worker.
+#
+# Key file: the per-user store at $JOBAPPLY_DATA/app/keys.json, or — when no data root
+# is set — the old single-user layout at app/keys.json next to the repo. A missing file
+# means nothing to do. One python3 call turns the JSON into `ENV_NAME=value` lines
+# (mapping fixed below; empty values skipped); the shell reads them with
+# IFS='=' read -r and exports each. The file is what the user saved LAST, so it wins
+# over a value already in the environment; a provider absent from the file leaves the
+# environment alone. Values are NEVER echoed — only names: the log line
+# "[worker_lib] keys loaded: <providers>", plus in WORKER_LIB_DRY_RUN=1 mode one
+# `key-env: <ENV_NAME>` line per exported variable.
+#
+# The python half of _load_user_keys: prints `ENV_NAME=value` lines for every key
+# stored in the key file. Kept in its own function so the heredoc stays at shell top
+# level — bash 3.2 (macOS's /bin/bash) mis-parses a heredoc nested inside a command
+# substitution. Empty/unreadable store: prints nothing, exits 0.
+_keys_env_lines() {
+  python3 - "$1" <<'PY'
+import json
+import sys
+
+# provider id -> env var, the same mapping lib/keys.py's PROVIDERS carry
+MAPPING = (
+    ("zai", "ZAI_API_KEY"),
+    ("zai_cn", "ZAI_CODING_CN_API_KEY"),
+    ("codex", "OPENAI_API_KEY"),
+    ("openrouter", "OPENROUTER_API_KEY"),
+)
+try:
+    with open(sys.argv[1], encoding="utf-8") as fh:
+        data = json.load(fh)
+except Exception:
+    raise SystemExit(0)  # unreadable store: nothing to inject, never an error
+for provider, env_name in MAPPING:
+    key = (data.get(provider) or {}).get("key") or ""
+    if key:  # skip empty values
+        print("%s=%s" % (env_name, key))
+PY
+}
+
+_load_user_keys() {
+  local key_file="${JOBAPPLY_DATA:+$JOBAPPLY_DATA/app/}keys.json"
+  if [[ -z "${JOBAPPLY_DATA:-}" ]]; then
+    key_file="$WORKER_LIB_DIR/../app/keys.json"
+  fi
+  [[ -f "$key_file" ]] || return 0
+  local name value env_name joined="" py_out=""
+  local loaded=() names=()
+  # One python3 call prints `ENV_NAME=value` lines (captured, not piped — a pipe
+  # would run this loop in a subshell and lose the exports); the shell reads them
+  # with IFS='=' read -r and exports each below.
+  py_out="$(_keys_env_lines "$key_file")" || true
+  while IFS='=' read -r name value; do
+    [[ -n "$name" ]] || continue
+    export "$name=$value"
+    loaded+=("$name")
+    case "$name" in
+      ZAI_API_KEY)              names+=(zai) ;;
+      ZAI_CODING_CN_API_KEY)    names+=(zai_cn) ;;
+      OPENAI_API_KEY)           names+=(codex) ;;
+      OPENROUTER_API_KEY)       names+=(openrouter) ;;
+    esac
+  done <<< "$py_out"
+  [[ ${#names[@]} -gt 0 ]] || return 0
+  joined="${names[0]}"
+  for ((i = 1; i < ${#names[@]}; i++)); do
+    joined="$joined, ${names[i]}"
+  done
+  # dry run prints to stdout (part of the reported argv); a real run logs to stderr, which
+  # the wrappers tee into the run log — stdout is the worker's trace and stays JSON-only.
+  if [[ "${WORKER_LIB_DRY_RUN:-0}" == "1" ]]; then
+    printf '[worker_lib] keys loaded: %s\n' "$joined"
+  else
+    printf '[worker_lib] keys loaded: %s\n' "$joined" >&2
+  fi
+  if [[ "${WORKER_LIB_DRY_RUN:-0}" == "1" ]]; then
+    for env_name in "${loaded[@]}"; do
+      printf 'key-env: %s\n' "$env_name"
+    done
+  fi
+}
+
 invoke_worker() {
   # $1 = prompt, $2 = max turns (claude branch only; pi has no turn cap — its "final
   # message with no tool call ends the run" contract plays the same role).
@@ -91,6 +179,10 @@ invoke_worker() {
   local worker model argv=()
 
   worker="$(worker_name)" || return $?
+
+  # BRAIN-001c: before any launch — both branches below — the user's stored keys go
+  # into the environment the worker inherits.
+  _load_user_keys
 
   case "$worker" in
     claude)

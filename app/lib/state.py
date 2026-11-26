@@ -256,6 +256,9 @@ def compute_status():
     a bool, computed by preferring a live check where one exists."""
     state = load_state()
     schedule_live = bool(own_launch_agent_plists())
+    # llm imports this module — importing it here (not at the top) avoids the cycle
+    # (same as readiness() below).
+    from . import llm
     status = {
         "profile_saved": profile_exists(),
         "rendered": rendered_exists(),
@@ -263,7 +266,10 @@ def compute_status():
         "cv_in_place": cv_pdf_exists(),
         "db_initialized": db_exists(),
         "linkedin_confirmed": bool(state.get("linkedin_confirmed")),
-        "claude_connected": bool(state.get("claude_connected")),
+        # BRAIN-001c: "some way of running applications is available" — the same rule
+        # readiness() uses (BRAIN-001b), so a key-only user counts as connected here
+        # too. The key keeps its historical name: templates and the tower read it.
+        "claude_connected": any(o["available"] for o in llm.application_options()),
         "schedule_installed": schedule_live or bool(state.get("schedule_installed")),
     }
     return status, state
@@ -287,7 +293,7 @@ STEP_LABELS = {
     "cv_in_place": "CV in place (a PDF ready to send)",
     "db_initialized": "Application list initialized",
     "linkedin_confirmed": "LinkedIn signed in once",
-    "claude_connected": "An AI connected (Claude signed in, or an API key that passed its test)",
+    "claude_connected": "An AI connected",
     "schedule_installed": "Daily schedule installed",
 }
 

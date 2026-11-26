@@ -79,6 +79,12 @@
 
   {# app_brain is (id, model, option) — an all-None tuple when nothing usable is saved #}
   {% set brain_id = app_brain[0] if app_brain else none %}
+  {# BRAIN-001c: a radio is ALWAYS preselected — the saved choice, else the first
+     AVAILABLE option — so a Save without a click still posts a `brain`; the checked
+     row's model field is enabled, the others disabled (disabled inputs don't post).
+     The inline script below keeps enforcing the same rule on change. #}
+  {% set first_available = app_options | selectattr('available') | list | first %}
+  {% set checked_id = brain_id or (first_available.id if first_available else none) %}
   {% if not brain_id %}
     <p class="note">No AI is set to fill in applications yet — pick one below and press Save.</p>
   {% endif %}
@@ -88,7 +94,7 @@
       <div class="field brain-option">
         <label class="checkbox-row brain-head">
           <input type="radio" name="brain" value="{{ o.id }}" {{ 'disabled' if not o.available }}
-                 {{ 'checked' if brain_id == o.id }}>
+                 {{ 'checked' if o.id == checked_id }}>
           <span>
             <strong>{{ o.label }}</strong> —
             <span class="note">{{ 'Claude, with your Claude login' if o.id == 'claude' else (o.label ~ ' key, through pi') }}</span>
@@ -96,7 +102,7 @@
         </label>
         {% if not o.available %}<p class="note">{{ o.why_not }}</p>{% endif %}
         <input type="text" name="model" value="{{ o.model }}" class="brain-model"
-               {{ 'disabled' if not o.available or brain_id != o.id }}>
+               {{ 'disabled' if not o.available or o.id != checked_id }}>
         <p class="note">provider/model, for example zai/glm-5.3-flash</p>
       </div>
     {% endfor %}
@@ -129,8 +135,8 @@
 <div class="card" id="claude">
   <div class="card-head">
     <h2>Claude</h2>
-    <span class="status-line {{ 'on' if status.claude_connected else 'off' }}">
-      <span class="dot"></span>{{ 'Connected' if status.claude_connected else 'Not connected' }}
+    <span class="status-line {{ 'on' if claude_ready else 'off' }}">
+      <span class="dot"></span>{{ 'Connected' if claude_ready else 'Not connected' }}
     </span>
   </div>
   <p class="note">One way to run applications. Also required for the helper jobs on the Documents page (generate a CV, draft answers).</p>
@@ -158,17 +164,17 @@
   {% endif %}
 
   <div class="actions-row">
-    {% if claude_cli and not status.claude_connected %}
+    {% if claude_cli and not claude_ready %}
       <form method="post" action="{{ url_for('connections_claude_terminal') }}">
         <button type="submit" class="btn">Log in to the AI</button>
       </form>
     {% endif %}
     <form method="post" action="{{ url_for('connections_claude_probe') }}">
       <button type="submit" class="btn secondary" {{ 'disabled' if not claude_cli }}>
-        {{ 'Check again' if status.claude_connected else 'Check' }}
+        {{ 'Check again' if claude_ready else 'Check' }}
       </button>
     </form>
-    {% if claude_cli and not status.claude_connected %}
+    {% if claude_cli and not claude_ready %}
       <span class="note">Log in opens a Terminal window with your own AI account — this app never sees the password.</span>
     {% endif %}
   </div>

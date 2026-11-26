@@ -14,6 +14,9 @@ Policy (deterministic enforcement of the CLAUDE.md "report, don't fix" contract)
   - applications.db: SELECT and plain INSERT only — no ALTER/CREATE/DROP/UPDATE/
     DELETE/REPLACE, via the sqlite3 CLI or the sqlite MCP server; no rm/mv of the
     DB file or the backups dir
+  - no printing of the secrets the worker was given (BRAIN-001c): its environment
+    keys, the key store (keys.json) and the mail credentials (credentials.json,
+    token*.json) — keys stay in the environment
 Deny = exit 2; stderr becomes the tool-call error the worker sees.
 This is a guardrail against ACCIDENTAL self-modification, not a security sandbox.
 """
@@ -58,6 +61,46 @@ def path_protected(p):
     return bool(PROTECTED.search(p))
 
 
+# --- BRAIN-001c: secrets stay sealed -------------------------------------------------
+# The worker's environment carries the user's API keys; no Bash command may print
+# them, and neither the key store nor the mail credentials may be read back.
+
+_SECRET_VAR_RE = re.compile(
+    r"\$[A-Za-z0-9_]*(?:KEY|TOKEN|SECRET)[A-Za-z0-9_]*"        # $ZAI_API_KEY
+    r"|\$\{[A-Za-z0-9_]*(?:KEY|TOKEN|SECRET)[A-Za-z0-9_]*\}"   # ${ZAI_API_KEY}
+)
+_SECRET_FILE_RE = re.compile(r"keys\.json|credentials\.json|token[\w.-]*\.json")
+_SECRET_READER_RE = re.compile(r"\b(?:cat|less|more|head|tail|grep|strings|python\w*)\b")
+
+
+def reveals_secrets(cmd):
+    """True when a Bash command could print what the worker was given:
+      - `printenv` (any form prints stored values);
+      - a bare `env` or `set`, or one piped into something, and `export -p` /
+        `declare -p` — the environment-dumping forms (`env VAR=x utility` runs a
+        utility and dumps nothing, so that one passes);
+      - `echo`/`printf` in a command that references a variable whose name contains
+        KEY/TOKEN/SECRET ($VAR and ${VAR} forms);
+      - a file reader (cat/less/more/head/tail/grep/strings/python*) in a command
+        that also names the key store (keys.json) or the mail credentials
+        (credentials.json, token*.json).
+    Deliberately coarse: a guard blocks first and asks no questions."""
+    if re.search(r"\bprintenv\b", cmd):
+        return True
+    # `env`/`set` alone or piped: split on the shell separators — a segment that is
+    # exactly the word is the dump form (a pipe just ends that segment early).
+    for seg in re.split(r"[;|&()\n]", cmd):
+        if seg.strip() in ("env", "set"):
+            return True
+    if re.search(r"\b(?:export|declare)\s+-p\b", cmd):
+        return True
+    if re.search(r"\b(?:echo|printf)\b", cmd) and _SECRET_VAR_RE.search(cmd):
+        return True
+    if _SECRET_READER_RE.search(cmd) and _SECRET_FILE_RE.search(cmd):
+        return True
+    return False
+
+
 if tool in ("Edit", "Write", "MultiEdit", "NotebookEdit"):
     fp = tin.get("file_path") or tin.get("notebook_path") or ""
     if path_protected(fp):
@@ -66,6 +109,8 @@ if tool in ("Edit", "Write", "MultiEdit", "NotebookEdit"):
 
 if tool == "Bash":
     cmd = tin.get("command") or ""
+    if reveals_secrets(cmd):
+        deny("Keys stay in the environment — this command is not allowed")
     if re.search(r"applications\.db", cmd):
         if re.search(r"\b(ALTER|CREATE|DROP|REINDEX|ATTACH|UPDATE|DELETE|REPLACE|VACUUM)\b", cmd, re.IGNORECASE):
             deny("DB mutation beyond plain INSERT/SELECT on applications.db "

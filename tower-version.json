@@ -1,6 +1,6 @@
 {
   "version": "0.1.0",
-  "notes": "Choose the AI that runs applications: Claude, or pi with a Z.ai, OpenRouter or OpenAI key (BRAIN-001).",
-  "engine": "214ac317342d811055edc1cb341d8dfd7b5a2966",
-  "date": "2026-11-26T00:14:46Z"
+  "notes": "Home shows the saved key as connected; the Applications card comes preselected; engine runs receive the stored keys.",
+  "engine": "c5f03a5ff22af7e9d0e133eddf2f762d2876ee31",
+  "date": "2026-11-26T07:42:03Z"
 }

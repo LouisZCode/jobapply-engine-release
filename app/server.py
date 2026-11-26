@@ -1108,6 +1108,8 @@ def connections_context(action_name=None, action_result=None):
     # recompute on every view — a Claude probe or a key save/remove above changes what's
     # available and the page just re-renders.
     ctx["app_options"] = llm.application_options()
+    # The Claude card shows CLAUDE's own state (login + CLI), not "some AI is available".
+    ctx["claude_ready"] = _claude_ready()
     ctx["app_brain"] = llm.application_brain()
     # Intelligence: provider API keys (Zai / Codex / OpenRouter) — hints only.
     ctx["key_providers"] = key_store.PROVIDERS
@@ -1208,8 +1210,9 @@ async def connections_keys_save(request: Request):
             state.update_state(key_test_results=results)
         activity.log_event("action", name="key_test", ok=bool(test["ok"]), provider=provider)
         if test["ok"]:
-            result["message"] = "{} Key saved — it rides into the engine when the app " \
-                                "starts a run (restart the tower if it's already running).".format(test["message"])
+            # BRAIN-001c: every run loads the user's key store itself (worker_lib.sh),
+            # so no tower restart is needed anymore.
+            result["message"] = "{} Key saved — the next run uses it.".format(test["message"])
         else:
             key_store.restore_entry(provider, previous)
             result = {"ok": False,
