@@ -3,8 +3,8 @@
 # generated at setup — see PRODUCT_INVENTORY.md).
 #
 # Cold-open (or reuse) the logged-in Chrome, ACTIVELY verify the LinkedIn session by probing
-# /feed over CDP, then run the apply routine headless via `claude -p` (STEP 3).
-# See claude_applicator/CLAUDE.md.
+# /feed over CDP, then run the apply routine headless via the worker (claude or pi — see
+# run_config.txt, STEP 3). See claude_applicator/CLAUDE.md.
 set -uo pipefail
 
 # Keep the Mac FULLY awake for the entire run. An idle Mac here sleeps ~1 min after
@@ -23,6 +23,10 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # MULTI-001: per-user data root (run logs, costs.csv, health_status.json, run_config.txt).
 # Defaults to this script's dir = today's behavior byte-identical when JOBAPPLY_DATA unset.
 DATA_ROOT="${JOBAPPLY_DATA:-$DIR}"
+# BRAIN-001a: the AI that runs applications is a setting — worker_lib.sh reads
+# WORKER/WORKER_MODEL from the user's run_config.txt (fresh per call) and launches the
+# selected harness, exporting JOBAPPLY_WORKER/JOBAPPLY_WORKER_MODEL for the DB stamping.
+source "$DIR/worker_lib.sh"
 # MULTI-002b: bind the engine directory to THIS user's files (repo-relative personal
 # files become symlinks into the data root) before anything below reads one. Exits 1
 # with a clear message when the user's rendered CLAUDE.md is missing — never continue a
@@ -171,9 +175,10 @@ echo "[2] $STATE"
 
 # STEP 3 — run the apply routine headless. The routine self-gates on MODE / daily cap /
 # run window (read fresh from run_config.txt), so a fixed 07:01 cadence is safe. Needs
-# /opt/homebrew/bin on PATH so claude can spawn the npx (playwright) + uvx (sqlite) MCP
-# servers, and ~/.local/bin for the claude binary (native installer);
-# --dangerously-skip-permissions because -p is non-interactive (no prompt to answer).
+# /opt/homebrew/bin on PATH so the worker (claude or pi, dispatched by worker_lib.sh) can
+# spawn the npx (playwright) + uvx (sqlite) MCP servers, and ~/.local/bin for the claude
+# binary (native installer); a non-interactive -p run skips permission prompts
+# (--dangerously-skip-permissions on the claude branch, --approve on the pi branch).
 export PATH="$HOME/.local/bin:/opt/homebrew/bin:$PATH"
 # Foreground-Bash timeout backstop: the harness does NOT block past a foreground command's
 # timeout (default 120s) — it moves the still-running command to the BACKGROUND, which
@@ -181,28 +186,22 @@ export PATH="$HOME/.local/bin:/opt/homebrew/bin:$PATH"
 # how the 2026-07-22 run died at 1 card / 0 applies on a >120s APPLY_GAP sleep). Raise the
 # default so the 90-240s gap sleeps always block in the foreground.
 export BASH_DEFAULT_TIMEOUT_MS=300000
-# Guard hook (2026-07-30): arm guard_hook.py (wired in ../.claude/settings.json) for every
-# claude worker this wrapper launches (incl. the step-4 mail agent, which inherits the env) —
+# Guard hook (2026-07-30): arm guard_hook.py (wired in ../.claude/settings.json for the
+# claude worker, loaded via .pi/extensions/jobapply-guard.ts for the pi worker) for every
+# worker this wrapper launches (incl. the step-4 mail agent, which inherits the env) —
 # workers may not edit config/code or mutate the DB beyond SELECT + plain INSERT; denied
 # attempts surface as ISSUE: lines in the run log instead.
 export JOBAPPLY_GUARD=1
 # MULTI-002b: .mcp.json's playwright args expand ${JOBAPPLY_CDP_PORT:-9222} and
 # ${JOBAPPLY_DATA:-.}/output from the worker's environment — make sure both are exported
-# for the claude invocations below (JOBAPPLY_DATA only when actually set: exporting an
+# for the worker invocations below (JOBAPPLY_DATA only when actually set: exporting an
 # empty default here would push "user mode" into the child scripts, e.g. bind_user.sh).
 export JOBAPPLY_CDP_PORT="${JOBAPPLY_CDP_PORT:-$PORT}"
 if [[ -n "${JOBAPPLY_DATA:-}" ]]; then export JOBAPPLY_DATA; fi
-# DATA-001: the worker model is defined ONCE here. The `claude -p` invocation below and the
-# DB stamp the worker writes (worker/model columns, CLAUDE.md step 8) both read it, so the
-# recorded model can never drift from what actually ran. Exported env (not a config file)
-# because the sqlite MCP server inherits the environment (.mcp.json has no env block).
-WORKER_MODEL=claude-sonnet-5
-export JOBAPPLY_WORKER=claude
-export JOBAPPLY_WORKER_MODEL="$WORKER_MODEL"
 RC=0
 SUMMARY=""
 if [[ "$STATE" == LOGGED_IN* ]]; then
-  # --- P1 context resets: ONE `claude -p` INVOCATION PER SEARCH QUERY -----------------
+  # --- P1 context resets: ONE worker INVOCATION PER SEARCH QUERY -----------------
   # A single all-day session re-reads its whole growing history every turn — ~90% of the
   # 2026-07-22 run's $98 was cache-reads by turn 663. Per-query invocations restart from
   # a small fresh context instead. All real state already lives OUTSIDE the context:
@@ -282,13 +281,13 @@ if [[ "$STATE" == LOGGED_IN* ]]; then
         PROMPT="$BASE_PROMPT CONTINUATION (attempt $ATTEMPT): a previous invocation of query #$Q was cut off mid-query (turn cap or error). Read the shared run log FIRST: results pages marked 'QUERY #$Q PAGE <P> DONE' are finished — re-open the query's filtered search URL (CLAUDE.md step 3), paginate directly to the first page of query #$Q WITHOUT a DONE marker, and continue from there. Do not re-evaluate anything already in the log."
       fi
       echo "[3] query #$Q/$QUERY_COUNT attempt $ATTEMPT (cap $USED/$DAILY_CAP used; up to $SLOTS) — trace=$(basename "$NDJSON")"
-      "$HOME/.local/bin/claude" -p "$PROMPT" \
-        --model "$WORKER_MODEL" \
-        --max-turns 250 \
-        --output-format stream-json --verbose \
-        --dangerously-skip-permissions </dev/null >"$NDJSON"
+      # BRAIN-001a: the worker (claude|pi per run_config.txt) is launched by worker_lib.sh,
+      # which also exports JOBAPPLY_WORKER/JOBAPPLY_WORKER_MODEL for the DB stamping. Its
+      # rc=64 means "launch refused" (unknown WORKER / pi without WORKER_MODEL) — the
+      # reason is on stderr, which the tee above puts in this log.
+      invoke_worker "$PROMPT" 250 </dev/null >"$NDJSON"
       QRC=$?
-      echo "[3] query #$Q attempt $ATTEMPT claude exited rc=$QRC"
+      echo "[3] query #$Q attempt $ATTEMPT worker exited rc=$QRC"
       # NOTE: an attempt's rc is deliberately NOT folded into the round's RC here. A
       # turn-capped attempt exits rc=1 (error_max_turns) by design and its continuation
       # usually finishes the query — the query's real verdict is the COMPLETE-marker
@@ -351,7 +350,7 @@ print(round((res or {}).get("total_cost_usd") or 0,2))' "$NDJSON")
   # matching 'APPLY END': that application is NOT in the DB and may sit half-filled in a
   # browser tab — surface it loudly for human review. Then close every leftover tab over CDP
   # (workers keep tabs between invocations by design; post-round they are dead weight), keeping
-  # one /feed tab so Chrome stays up and logged in. Deterministic — no claude invocation.
+  # one /feed tab so Chrome stays up and logged in. Deterministic — no worker invocation.
   echo "[3b] orphan-apply check + stray-tab cleanup"
   if [[ -f "$SHARED_RUN_LOG" ]]; then
     ORPHANS=$(python3 - "$SHARED_RUN_LOG" <<'PYEOF'
@@ -426,7 +425,7 @@ echo "[cost] round \$${ROUND_COST:-0} + mail \$${MAIL_COST:-0} | applies today: 
 
 echo "[done] scheduled run complete @ $(date '+%H:%M:%S')"
 
-# RB-1: one-line summary reused from the claude trace's final result when available.
+# RB-1: one-line summary reused from the worker trace's final result when available.
 ONELINE=$(printf '%s' "$SUMMARY" | tr '\n' ' ' | cut -c1-300)
 JOBHEALTH_STATUS_PATH="$DATA_ROOT/output/health_status.json" python3 "$DIR/health_update.py" apply "$RC" "$ONELINE" || true
 if [[ "$RC" -ne 0 ]]; then

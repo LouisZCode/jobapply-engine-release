@@ -1104,6 +1104,11 @@ def connections_context(action_name=None, action_result=None):
     ctx["test_mode"] = actions.test_mode()
     ctx["action_name"] = action_name
     ctx["action_result"] = action_result
+    # Applications (BRAIN-001b): which AI fills in the forms on engine runs. The options
+    # recompute on every view — a Claude probe or a key save/remove above changes what's
+    # available and the page just re-renders.
+    ctx["app_options"] = llm.application_options()
+    ctx["app_brain"] = llm.application_brain()
     # Intelligence: provider API keys (Zai / Codex / OpenRouter) — hints only.
     ctx["key_providers"] = key_store.PROVIDERS
     ctx["key_hints"] = key_store.hints()
@@ -1116,6 +1121,29 @@ async def connections(request: Request):
     flashed = flash_pop("connections")
     return render(request, "connections.html",
                   connections_context(flashed.get("action_name"), flashed.get("action_result")))
+
+
+@app.post("/connections/application-brain")
+async def connections_application_brain(request: Request):
+    """The Applications card's Save: validates the picked AI + model, stores the choice
+    in app_state and writes the engine's WORKER/WORKER_MODEL switches (every later run
+    reads them fresh). Failure texts come from llm.set_application_brain as ValueError."""
+    form = await request.form()
+    brain = (form.get("brain") or "").strip()
+    model = (form.get("model") or "").strip()
+    try:
+        option = llm.set_application_brain(brain, model)
+    except ValueError as exc:
+        activity.log_event("action", name="application_brain", ok=False, brain=brain, message=str(exc)[:200])
+        flash("connections", action_name="application_brain",
+              action_result={"ok": False, "message": str(exc)})
+        return redirect("connections", "#applications")
+    message = "Applications will be filled in by {} with {}.".format(option["label"], model)
+    if state.own_launch_agent_plists():
+        message += " Your daily run uses it from its next start."
+    activity.log_event("action", name="application_brain", ok=True, brain=brain, model=model[:80])
+    flash("connections", action_name="application_brain", action_result={"ok": True, "message": message})
+    return redirect("connections", "#applications")
 
 
 @app.post("/connections/linkedin/launch")

@@ -1,6 +1,7 @@
 # claude_applicator — LinkedIn auto-apply routine
 
-This folder **is** the routine. When Claude Code runs here, this file is the program:
+This folder **is** the routine. You are the agent running this routine, and this file is your
+program:
 search LinkedIn for relevant jobs, apply via **Easy Apply** — or the company's external application page when a job has no Easy Apply — using ONLY the answer bank
 in `profile.yaml`, and record every outcome in `applications.db`.
 
@@ -43,7 +44,7 @@ responses). The single thing held back for safety is the final submit click.
 
 ## Single-query mode — when the launch prompt names ONE query (P1 context resets, 2026-07-22)
 
-The scheduled wrapper launches one `claude -p` invocation PER search query instead of one for the
+The scheduled wrapper launches one headless worker invocation PER search query instead of one for the
 whole day: a single all-day session re-reads its entire growing history on every turn, which was
 ~90% of run cost. Your invocation is a disposable worker — every fact that must outlive you is
 already on disk (DB, run_config.txt, the shared run log), and Chrome keeps its tabs between
@@ -638,7 +639,7 @@ and report to the user. Do **not** run the routine again until the user confirms
    DB). Then run `./db_report.sh` from this folder to refresh the human-readable DB mirror at the
    repo root.
 
-**Your final response ends the run.** `claude -p` exits the moment you produce a message with no
+**Your final response ends the run.** The headless worker exits the moment you produce a message with no
 tool call — so never end your turn to "wait" for anything (waiting is always a FOREGROUND `sleep`),
 and never narrate "waiting / moving on next..." as a message. Until step 5 is fully done (run log
 written + `db_report.sh` run), every response must carry the next tool call. Output your wrap-up
@@ -705,7 +706,7 @@ Fill from `profile.yaml` ONLY. Never invent. Specifics:
 - Don't run headless or add any stealth/anti-detection flags — the honest real browser is the asset.
 - Don't accept cookie/consent banners — always click Reject (or the most minimal option).
 - Don't apply outside `RUN_WINDOW_LOCAL`. Don't skip the randomized `ACTION_DELAY_SECONDS` on `linkedin.com` tabs, or the `APPLY_GAP_SECONDS` between applications. (Skipping the per-action delay on external ATS tabs is INTENDED — not a violation.)
-- Don't end your turn mid-run — a final message terminates `claude -p`. No "waiting..." sign-offs;
+- Don't end your turn mid-run — a final message terminates the headless worker run. No "waiting..." sign-offs;
   sleep in the foreground (explicit `timeout: 300000` on any sleep that can top ~100s — the 120s
   default auto-BACKGROUNDS a foreground command, it does not block) and keep working until the
   caps/pages are exhausted AND step 5 is written.

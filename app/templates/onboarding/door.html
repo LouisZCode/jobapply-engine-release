@@ -58,17 +58,16 @@
                 {% endif %}
                 {% if r.key == 'ai' %}
                   {% if r.has_key %}
-                    <p class="door-msg">You've already added an API key. That covers the helpers; applications still need Claude.</p>
+                    <p class="door-msg">You've already added an API key — that can run applications too, through pi.</p>
                   {% endif %}
                   <div class="door-options">
                     <div>
-                      <strong>Claude</strong> — the AI that fills in applications.<br>
+                      <strong>Claude</strong> — fills in applications.<br>
                       <a class="btn small secondary" href="{{ r.url }}" target="_blank" rel="noopener">Open {{ r.link }} ↗</a>
                       <span class="note">Install it, then sign in once inside the app.</span>
                     </div>
                     <div>
-                      <strong>An API key</strong> ({{ ai_key_names }}) — optional. It helps with reading your CV and
-                      drafting answers. Add it inside the app, under Connections.
+                      <strong>An API key</strong> (Z.ai, OpenRouter, OpenAI) — also fills in applications, through pi. Add it inside the app, under Connections.
                     </div>
                   </div>
                 {% else %}

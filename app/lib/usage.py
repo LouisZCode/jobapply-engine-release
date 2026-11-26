@@ -47,6 +47,7 @@ def _result_record(path):
             chunk = fh.read().decode("utf-8", errors="replace")
     except OSError:
         return None
+    # A pi worker run records no usage yet: its traces carry no Claude "result" event, so they are skipped here.
     for line in reversed(chunk.splitlines()):
         line = line.strip()
         if not line.startswith("{") or '"result"' not in line:

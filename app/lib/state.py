@@ -97,6 +97,17 @@ def claude_cli_path():
     return shutil.which("claude")
 
 
+def pi_cli_path():
+    """The pi coding-agent CLI, or None — the harness the engine's pi worker runs
+    through (BRAIN-001b). Same lookup order worker_lib.sh uses: PATH first, then the
+    install script's default location."""
+    found = shutil.which("pi")
+    if found:
+        return found
+    default = os.path.join(os.path.expanduser("~"), ".pi", "agent", "bin", "pi")
+    return default if os.path.isfile(default) else None
+
+
 _USAGE_LIMIT_RE = re.compile(r"limit reached|usage limit|rate limit|out of usage", re.I)
 _USAGE_RESET_RE = re.compile(r"(?:resets?|try again)[^.]*?(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)", re.I)
 
@@ -301,6 +312,9 @@ def readiness():
     gates installing the schedule, so it can't also depend on the schedule already being
     installed. Returns (items, ready) where ready = all(item["ok"] for item in items)."""
     st = load_state()
+    # llm imports this module — importing it here (not at the top) avoids the cycle.
+    from . import llm
+
     profile = profile_io.load_profile()
     form = profile_io.form_from_profile(profile) if profile is not None else {}
     profile_complete = profile is not None and all(
@@ -316,12 +330,12 @@ def readiness():
     # info → CV → what a run prepares → LinkedIn last. `ready` is still "every item ok".
     items = [
         {
-            # Intelligence gate (Luis, 2026-11-08): a working provider API key that passed
-            # its test replaces the Claude-connection requirement.
+            # Intelligence gate (BRAIN-001b): any AI that can currently fill in an
+            # application counts — the Claude CLI, or a stored key with pi installed
+            # (llm.application_options() decides, Connections page picks which).
             "key": "claude_connected",
             "label": STEP_LABELS["claude_connected"],
-            "ok": (bool(st.get("claude_connected")) and claude_cli_path() is not None)
-                  or any((v or {}).get("ok") for v in (st.get("key_test_results") or {}).values()),
+            "ok": any(o["available"] for o in llm.application_options()),
             "page": STEP_LINKS["claude_connected"],
         },
         {

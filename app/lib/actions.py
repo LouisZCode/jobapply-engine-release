@@ -502,11 +502,18 @@ def set_keep_awake(turn_on, hh_mm):
     return result
 
 
-def update_run_config(mode, max_applies):
-    """Rewrites ONLY the MODE and MAX_APPLIES_PER_RUN keys in run_config.txt, preserving
-    every other line byte-for-byte (comments, other knobs, ordering)."""
-    with open(paths.RUN_CONFIG, encoding="utf-8") as fh:
-        lines = fh.readlines()
+def set_run_config_keys(mapping):
+    """Rewrites the value of each `KEY:` line in run_config.txt that exists — keeping
+    the rest of the line byte-for-byte (inline comments, spacing, ordering) — and
+    appends the keys that do not exist at the end, one per line, `KEY: value`.
+    Returns True iff every key was already present in the file. Same file, same
+    permissions; written atomically (temp file + replace) so a run that reads the
+    config fresh mid-write never sees half of it. BRAIN-001b generalized this from
+    update_run_config (MODE/MAX_APPLIES_PER_RUN) to any keys (WORKER/WORKER_MODEL)."""
+    lines = []
+    if os.path.isfile(paths.RUN_CONFIG):
+        with open(paths.RUN_CONFIG, encoding="utf-8") as fh:
+            lines = fh.readlines()
 
     def replace_key(lines, key, value):
         # Captures (key + colon + leading whitespace), (old value token), (everything
@@ -526,13 +533,35 @@ def update_run_config(mode, max_applies):
                 out.append(line)
         return out, found
 
-    lines, found_mode = replace_key(lines, "MODE", mode)
-    lines, found_max = replace_key(lines, "MAX_APPLIES_PER_RUN", max_applies)
+    found = {}
+    for key, value in mapping.items():
+        lines, was_found = replace_key(lines, key, value)
+        found[key] = was_found
 
-    with open(paths.RUN_CONFIG, "w", encoding="utf-8") as fh:
+    missing = ["{}: {}\n".format(key, value) for key, value in mapping.items() if not found[key]]
+    if missing:
+        if lines and not lines[-1].endswith("\n"):
+            lines[-1] += "\n"
+        lines.extend(missing)
+
+    os.makedirs(os.path.dirname(paths.RUN_CONFIG) or ".", exist_ok=True)
+    tmp = paths.RUN_CONFIG + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as fh:
         fh.writelines(lines)
+    # Same file, same permissions — a brand-new file gets the repo's usual 0644.
+    mode = 0o644
+    if os.path.isfile(paths.RUN_CONFIG):
+        mode = os.stat(paths.RUN_CONFIG).st_mode & 0o777
+    os.chmod(tmp, mode)
+    os.replace(tmp, paths.RUN_CONFIG)  # atomic — a reader never sees half a file
 
-    return found_mode and found_max
+    return all(found.values())
+
+
+def update_run_config(mode, max_applies):
+    """Rewrites ONLY the MODE and MAX_APPLIES_PER_RUN keys in run_config.txt, preserving
+    every other line byte-for-byte (comments, other knobs, ordering)."""
+    return set_run_config_keys({"MODE": mode, "MAX_APPLIES_PER_RUN": max_applies})
 
 
 # ------------------------------------------------------------------------------

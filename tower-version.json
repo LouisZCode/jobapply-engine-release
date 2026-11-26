@@ -1,6 +1,6 @@
 {
   "version": "0.1.0",
-  "notes": "Chosen CV and AI usage are found for each user before the first run.",
-  "engine": "5778dad8c9d868f8c8933f87a90d97d2c69616b5",
-  "date": "2026-11-25T23:28:23Z"
+  "notes": "Choose the AI that runs applications: Claude, or pi with a Z.ai, OpenRouter or OpenAI key (BRAIN-001).",
+  "engine": "214ac317342d811055edc1cb341d8dfd7b5a2966",
+  "date": "2026-11-26T00:14:46Z"
 }

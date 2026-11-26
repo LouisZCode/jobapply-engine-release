@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# LOOP-003 mail agent — Sonnet organizes Gmail + reconciles the DB after the apply round.
+# LOOP-003 mail agent — the worker AI (claude or pi, per run_config.txt) organizes Gmail
+# + reconciles the DB after the apply round.
 #
 # Replaces the regex brain (LOOP-002 sweep) as the DAILY organizer: run_scheduled.sh STEP 4
 # chains this right after the apply round finishes, so mail is sorted before the next day.
@@ -17,6 +18,9 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # MULTI-001: per-user data root (heartbeat log, sweep lock, health_status.json).
 # Default = script dir = today's behavior byte-identical when JOBAPPLY_DATA unset.
 DATA_ROOT="${JOBAPPLY_DATA:-$DIR}"
+# BRAIN-001a: the worker (claude|pi) is dispatched by worker_lib.sh from run_config.txt;
+# it also exports JOBAPPLY_WORKER/JOBAPPLY_WORKER_MODEL for the DB stamping.
+source "$DIR/worker_lib.sh"
 # MULTI-002b: bind the engine directory to THIS user's files (MAIL_AGENT.md, user_mail.json,
 # tokens, ...) before the agent reads them; fails with a clear message when the user's
 # rendered CLAUDE.md is missing.
@@ -84,14 +88,15 @@ echo "===== mail-AGENT START @ $(date '+%Y-%m-%d %H:%M:%S %Z') =====" >> "$HEART
 PROMPT="You are the LOOP-003 mail agent. Working directory: $DIR (cd there first). Read inbox_reader/MAIL_AGENT.md — it is your complete program — and execute it now: load the corpus, work the inbox, run the reconcile pass, write the report log, refresh db_report.sh, and end with the summary counts."
 
 cd "$DIR"
-"$HOME/.local/bin/claude" -p "$PROMPT" \
-  --model claude-sonnet-5 \
-  --max-turns 100 \
-  --output-format stream-json --verbose \
-  --dangerously-skip-permissions </dev/null >"$NDJSON"
+# BRAIN-001a: worker_lib.sh launches the selected harness; rc=64 = launch refused
+# (unknown WORKER / pi without WORKER_MODEL) — a failed run. The worker's stderr (the
+# refusal reason included) goes to the heartbeat log, not just the parent's stderr.
+invoke_worker "$PROMPT" 100 </dev/null >"$NDJSON" 2>>"$HEARTBEAT"
 RC=$?
 
-# cost + one-line summary out of the trace's final result event (best-effort)
+# cost + one-line summary out of the trace's final result event (best-effort). A pi run
+# prints its final text on stdout and emits no Claude "result" event — say so instead
+# of failing on the missing cost line.
 python3 - "$NDJSON" >> "$HEARTBEAT" 2>/dev/null <<'PY' || true
 import json, sys
 cost, txt = None, ""
@@ -103,7 +108,10 @@ for line in open(sys.argv[1], encoding="utf-8", errors="replace"):
     if ev.get("type") == "result":
         cost = ev.get("total_cost_usd")
         txt = (ev.get("result") or "")[:300].replace("\n", " ")
-print("[mail-agent ${:.2f}] {}".format(cost, txt) if cost is not None else "(no result event in trace)")
+if cost is not None:
+    print("[mail-agent ${:.2f}] {}".format(cost, txt))
+else:
+    print("[mail-agent $0.00] (no cost event from this harness)")
 PY
 
 "$DIR/db_report.sh" >/dev/null 2>&1 || true

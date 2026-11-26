@@ -2,9 +2,9 @@
 # apply_one.sh <job_url> ["context note from the user"]
 #
 # QUEUE-001 Proposal-1: single-URL apply entry point. The user sends a job link (from
-# their phone, recruiter outreach, anywhere); this launches ONE Sonnet `claude -p` worker
-# invocation that applies to exactly that job under the full CLAUDE.md contract (Single-URL
-# mode section): suppression checks + caps still bind, relevance gate is skipped (the user
+# their phone, recruiter outreach, anywhere); this launches ONE worker invocation
+# (claude or pi, per run_config.txt) that applies to exactly that job under the full
+# CLAUDE.md contract (Single-URL mode section): suppression checks + caps still bind, relevance gate is skipped (the user
 # picked the job), RUN_WINDOW_LOCAL does not bind (human-initiated). Mirrors
 # run_scheduled.sh's invocation conventions so the worker runs with the same env, guard
 # hook, trace and log shapes.
@@ -13,6 +13,9 @@ set -uo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # MULTI-001: per-user data root (user.env, run logs). Default = script dir = today's behavior.
 DATA_ROOT="${JOBAPPLY_DATA:-$DIR}"
+# BRAIN-001a: the worker (claude|pi) is dispatched by worker_lib.sh from run_config.txt;
+# it also exports JOBAPPLY_WORKER/JOBAPPLY_WORKER_MODEL for the DB stamping.
+source "$DIR/worker_lib.sh"
 # MULTI-002b: bind the engine directory to THIS user's files before anything reads one
 # (fails with a clear message when the user's rendered CLAUDE.md is missing).
 bash "$DIR/bind_user.sh" || exit 1
@@ -76,13 +79,6 @@ trap 'rm -rf "$LOCKDIR"' EXIT
 export PATH="$HOME/.local/bin:/opt/homebrew/bin:$PATH"
 export BASH_DEFAULT_TIMEOUT_MS=300000
 export JOBAPPLY_GUARD=1
-# DATA-001 (same as run_scheduled.sh STEP 3): the model is defined ONCE here, used in the
-# invocation below and exported as the DB stamp source (worker/model columns, CLAUDE.md
-# step 8) — the stamp can never differ from what ran. The sqlite MCP server inherits it
-# (.mcp.json has no env block).
-WORKER_MODEL=claude-sonnet-5
-export JOBAPPLY_WORKER=claude
-export JOBAPPLY_WORKER_MODEL="$WORKER_MODEL"
 
 cd "$DIR" || { echo "cannot cd to $DIR — aborting"; exit 1; }
 
@@ -95,11 +91,10 @@ if [[ -n "$CONTEXT" ]]; then
 fi
 
 echo "[1] launching worker — trace=$(basename "$NDJSON")"
-"$HOME/.local/bin/claude" -p "$PROMPT" \
-  --model "$WORKER_MODEL" \
-  --max-turns 100 \
-  --output-format stream-json --verbose \
-  --dangerously-skip-permissions </dev/null >"$NDJSON"
+# BRAIN-001a: worker_lib.sh launches the selected harness and stamps
+# JOBAPPLY_WORKER/JOBAPPLY_WORKER_MODEL; rc=64 = launch refused (unknown WORKER / pi
+# without WORKER_MODEL) — the reason is on stderr, which the tee above puts in this log.
+invoke_worker "$PROMPT" 100 </dev/null >"$NDJSON"
 RC=$?
 echo "[1] worker exited rc=$RC"
 

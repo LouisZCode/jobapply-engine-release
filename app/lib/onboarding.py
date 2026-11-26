@@ -20,7 +20,7 @@ has (claude probe, launchctl, Chrome) — the whole flow is curl-testable.
 import os
 import re
 
-from . import actions, keys, paths, profile_io, state
+from . import actions, keys, llm, paths, profile_io, state
 
 # ------------------------------------------------------------------ step map
 # (key, short title, one-line purpose). Order is the wizard order; the step index
@@ -180,8 +180,11 @@ def door_rows():
         {
             "key": "ai",
             "label": "An AI assistant",
-            "why": "Claude is the AI that reads job posts and fills in the forms.",
-            "ok": state.claude_cli_path() is not None,
+            # BRAIN-001b: any application AI counts — Claude, or a stored key with pi
+            # installed (llm.application_options() decides, same list the Connections
+            # page picks from).
+            "why": "The AI reads job posts and fills in the forms. Claude, or an API key (Z.ai, OpenRouter, OpenAI).",
+            "ok": any(o["available"] for o in llm.application_options()),
             "url": DOOR_AI_URL,
             "link": "claude.ai/download",
             "install": "Download Claude, install it, then sign in once inside the app.",

@@ -24,6 +24,13 @@ PROVIDERS = {
         "base_url": "https://api.z.ai/api/paas/v4",
         "blurb": "Add your Zai key — the engine can run on GLM models via the pi worker.",
     },
+    "zai_cn": {
+        "label": "Z.ai (China)",
+        "env": "ZAI_CODING_CN_API_KEY",
+        "base_env": "ZAI_CODING_CN_BASE_URL",
+        "base_url": "https://open.bigmodel.cn/api/paas/v4",
+        "blurb": "Add your Z.ai (China) key — the engine can run on GLM models via the pi worker.",
+    },
     "codex": {
         "label": "Codex / OpenAI",
         "env": "OPENAI_API_KEY",
@@ -81,6 +88,7 @@ def restore_entry(provider, entry):
 
 _CHECK_URLS = {
     "zai": "https://api.z.ai/api/paas/v4/models",
+    "zai_cn": "https://open.bigmodel.cn/api/paas/v4/models",
     "codex": "https://api.openai.com/v1/models",
     "openrouter": "https://openrouter.ai/api/v1/key",
 }

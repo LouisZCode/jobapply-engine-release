@@ -78,3 +78,25 @@ The password separates people who share this Mac; it does not encrypt files.
 
 For development and tests: starting the server with `JOBAPPLY_DATA` set skips the
 login page and runs the old single-user way against that folder.
+
+## Which AI runs applications (2026-11-25)
+
+On the Connections page, under "Applications", you pick the AI that reads job posts and
+fills in the forms for you:
+
+| Option | What it needs | Default model |
+|---|---|---|
+| Claude | the Claude CLI and a Claude login | `claude-haiku-5-5` |
+| Z.ai | a Z.ai key and pi | `zai/glm-5.3-flash` |
+| Z.ai (China) | a Z.ai China key and pi | `zai-coding-cn/glm-5.3-flash` |
+| OpenRouter | an OpenRouter key and pi | `openrouter/z-ai/glm-5.3-flash` |
+| OpenAI | an OpenAI key and pi | `openai/gpt-5.4-mini` |
+
+The model field takes `provider/model` and can be changed. pi is a small program that
+runs the AI: install it once with `curl -fsSL https://pi.dev/install.sh | sh` if the
+page says it is missing. A run uses only what you connected in the app — the worker
+starts with an empty pi of its own (none of the pi setup of the person at the keyboard:
+no other servers, skills or logins) and records in the database which AI and model ran
+each application.
+
+The helper jobs on the Documents page (generate a CV, draft answers) still need Claude.

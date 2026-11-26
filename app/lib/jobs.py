@@ -559,11 +559,11 @@ def _start(name, prompt, timeout_s, canned_output=None, max_turns=None, extra=No
             JOB_LABELS.get(running_name, running_name)
         )
 
-    # Engine jobs (argv-style) still hard-require the Claude CLI — the engine's worker
-    # dispatch is Claude-only until the worker port lands. App-side cv_extract for a
-    # key-brain never comes through _start (it runs the llm.py thread path instead).
+    # Engine jobs (argv-style) still hard-require the Claude CLI (kept deliberately,
+    # BRAIN-001b: only the refusal text changed). App-side cv_extract for a key-brain
+    # never comes through _start (it runs the llm.py thread path instead).
     if not actions.test_mode() and argv is not None and state.claude_cli_path() is None:
-        return False, "Claude CLI not found on PATH — connect it on the Connections page first."
+        return False, "This job needs Claude. On this page you can add your CV and your answers by hand, or connect Claude under Connections."
 
     is_claude_job = argv is None
     argv = argv if argv is not None else _claude_argv(prompt, max_turns=max_turns)

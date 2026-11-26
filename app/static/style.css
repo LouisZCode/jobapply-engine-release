@@ -762,6 +762,14 @@ code.inline {
 .actions-row .key-form { display: flex; gap: 8px; align-items: center; }
 .actions-row .key-input { min-width: 220px; }
 
+/* Connections → Applications (BRAIN-001b): one row per AI option — the radio + label
+   line reuses .checkbox-row; each row carries its own model field under it. */
+.brain-option { padding: 12px 0; border-bottom: 1px solid var(--border); }
+.brain-option:last-of-type { border-bottom: none; }
+.brain-option .brain-head { flex-wrap: wrap; align-items: baseline; }
+.brain-option .brain-model { max-width: 360px; margin-top: 6px; }
+.brain-option .note { margin: 4px 0 0; }
+
 /* ------------------------------------------------------------------ */
 /* MULTI-002 — the login page (wizard frame, so only the few bits the door
    doesn't already have) and the sidebar's logged-in row. */
